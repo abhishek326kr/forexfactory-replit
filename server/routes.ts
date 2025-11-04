@@ -2417,38 +2417,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate slug if not provided
       const slug = seoSlug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
-      // Create blog post
-      const blog = await prisma.blog.create({
-        data: {
-          title,
-          content,
-          author: author || req.user?.name || 'Admin',
-          seoSlug: slug,
-          status: status as any,
-          featuredImage: featuredImage || '',
-          categoryId: categoryId ? Number(categoryId) : 1,
-          tags: tags || '',
-          downloadLink,
-          views: 0,
-          createdAt: new Date()
-        }
-      });
+      // Use storage layer instead of direct Prisma
+      const blogData = {
+        title,
+        content,
+        author: author || req.user?.username || 'Admin',
+        seoSlug: slug,
+        status: status as BlogStatus,
+        featuredImage: featuredImage || '',
+        categoryId: categoryId ? Number(categoryId) : 1,
+        tags: tags || '',
+        downloadLink,
+        views: 0,
+        createdAt: new Date()
+      };
+
+      // Create blog using storage layer
+      const blog = await storage.createBlog(blogData);
 
       // Create SEO meta if provided
       if (seoTitle || seoDescription || seoKeywords || canonicalUrl || metaRobots || ogTitle || ogDescription) {
-        await prisma.seoMeta.create({
-          data: {
-            postId: blog.id,
-            seoTitle,
-            seoDescription,
-            seoKeywords,
-            seoSlug: slug,
-            canonicalUrl,
-            metaRobots: metaRobots as any,
-            ogTitle,
-            ogDescription,
-            ogImage: ogImage || featuredImage
-          }
+        await storage.createSeoMeta({
+          postId: blog.id,
+          seoTitle: seoTitle || title,
+          seoDescription: seoDescription || '',
+          seoKeywords: seoKeywords || '',
+          seoSlug: slug,
+          canonicalUrl: canonicalUrl || '',
+          metaRobots: (metaRobots as MetaRobots) || 'index_follow',
+          ogTitle: ogTitle || title,
+          ogDescription: ogDescription || seoDescription || '',
+          ogImage: ogImage || featuredImage || ''
         });
       }
 
@@ -2487,8 +2486,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ogImage
       } = req.body;
 
-      // Update blog post
-      const updateData: any = {};
+      // Update blog post using storage layer
+      const updateData: Partial<BlogInsert> = {};
       if (title !== undefined) updateData.title = title;
       if (content !== undefined) updateData.content = content;
       if (author !== undefined) updateData.author = author;
@@ -2496,18 +2495,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (categoryId !== undefined) updateData.categoryId = Number(categoryId);
       if (tags !== undefined) updateData.tags = tags;
       if (downloadLink !== undefined) updateData.downloadLink = downloadLink;
-      if (status !== undefined) updateData.status = status;
+      if (status !== undefined) updateData.status = status as BlogStatus;
       if (seoSlug !== undefined) updateData.seoSlug = seoSlug;
 
-      const blog = await prisma.blog.update({
-        where: { id: Number(id) },
-        data: updateData
-      });
+      const blog = await storage.updateBlog(Number(id), updateData);
 
-      // Update or create SEO meta
-      const existingSeoMeta = await prisma.seoMeta.findFirst({
-        where: { postId: Number(id) }
-      });
+      if (!blog) {
+        return res.status(404).json({ error: "Blog not found" });
+      }
+
+      // Update SEO meta if provided
+      const existingSeoMeta = await storage.getSeoMetaByPostId(Number(id));
 
       const seoData: any = {};
       if (seoTitle !== undefined) seoData.seoTitle = seoTitle;
@@ -2522,16 +2520,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (Object.keys(seoData).length > 0) {
         if (existingSeoMeta) {
-          await prisma.seoMeta.update({
-            where: { id: existingSeoMeta.id },
-            data: seoData
-          });
+          await storage.updateSeoMeta(existingSeoMeta.id, seoData);
         } else {
-          await prisma.seoMeta.create({
-            data: {
-              ...seoData,
-              postId: Number(id)
-            }
+          await storage.createSeoMeta({
+            ...seoData,
+            postId: Number(id)
           });
         }
       }
