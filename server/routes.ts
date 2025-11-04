@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { prisma } from "./db";
+import { prisma, getDatabaseHealth, isDatabaseConnected } from "./db";
 import { generateSitemap, generateSitemapIndex, generateNewsSitemap } from "./sitemap";
 import { generateRobotsTxt, generateDynamicRobotsTxt } from "./robots";
 import { generateRssFeed, generateDownloadsRssFeed, generateAtomFeed } from "./feed";
@@ -320,6 +320,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // GET /api/health - Health check endpoint for monitoring
+  app.get("/api/health", async (req: Request, res: Response) => {
+    try {
+      const health = await getDatabaseHealth();
+      const httpStatus = health.connected ? 200 : 503;
+      
+      // Add server information
+      const serverHealth = {
+        ...health,
+        server: {
+          status: 'running',
+          environment: process.env.NODE_ENV || 'development',
+          uptime: process.uptime(),
+          memoryUsage: process.memoryUsage(),
+          nodeVersion: process.version
+        },
+        timestamp: new Date().toISOString()
+      };
+      
+      res.status(httpStatus).json(serverHealth);
+    } catch (error: any) {
+      console.error('Health check error:', error);
+      res.status(503).json({
+        status: 'unhealthy',
+        connected: false,
+        error: error.message,
+        server: {
+          status: 'running',
+          environment: process.env.NODE_ENV || 'development',
+          uptime: process.uptime()
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
   // POST /api/auth/register - User registration (optional, for creating admin users)
   app.post("/api/auth/register", requireAdmin, async (req: Request, res: Response) => {
     try {
@@ -381,6 +417,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { page, limit, sortBy, sortOrder } = parsePagination(req);
       const { status } = req.query;
       
+      // Check if database is connected
+      const dbConnected = await isDatabaseConnected();
+      if (!dbConnected) {
+        console.warn('Database unavailable - returning graceful response for /api/posts');
+        return res.status(200).json({
+          data: [],
+          total: 0,
+          page,
+          totalPages: 0,
+          warning: 'Database is currently unavailable. Posts will be available once the connection is restored.'
+        });
+      }
+      
       const skip = (page - 1) * limit;
       const where: any = {};
       
@@ -433,9 +482,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         page,
         totalPages: Math.ceil(total / limit)
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching posts:", error);
-      res.status(500).json({ error: "Failed to fetch posts" });
+      // Check if it's a database connection error
+      if (error.message?.includes("Can't reach database server") || error.code === 'P2002') {
+        return res.status(200).json({
+          data: [],
+          total: 0,
+          page,
+          totalPages: 0,
+          warning: 'Database connection error. Posts are temporarily unavailable.'
+        });
+      }
+      res.status(500).json({ 
+        error: "Failed to fetch posts",
+        message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
     }
   });
 
@@ -893,6 +955,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { page, limit, sortBy, sortOrder } = parsePagination(req);
       
+      // Check if database is connected
+      const dbConnected = await isDatabaseConnected();
+      if (!dbConnected) {
+        console.warn('Database unavailable - returning graceful response for /api/downloads');
+        return res.status(200).json({
+          data: [],
+          total: 0,
+          page,
+          totalPages: 0,
+          warning: 'Database is currently unavailable. Downloads will be available once the connection is restored.'
+        });
+      }
+      
       const skip = (page - 1) * limit;
       
       // Get signals from database
@@ -933,9 +1008,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         page,
         totalPages: Math.ceil(total / limit)
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching downloads:", error);
-      res.status(500).json({ error: "Failed to fetch downloads" });
+      // Check if it's a database connection error
+      if (error.message?.includes("Can't reach database server") || error.code === 'P2002') {
+        return res.status(200).json({
+          data: [],
+          total: 0,
+          page,
+          totalPages: 0,
+          warning: 'Database connection error. Downloads are temporarily unavailable.'
+        });
+      }
+      res.status(500).json({ 
+        error: "Failed to fetch downloads",
+        message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
     }
   });
 
