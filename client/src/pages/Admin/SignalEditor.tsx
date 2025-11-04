@@ -43,6 +43,7 @@ import {
   AlertCircle,
   Star
 } from 'lucide-react';
+import FileUpload from '@/components/FileUpload';
 
 const signalSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name is too long'),
@@ -597,15 +598,21 @@ export default function SignalEditor() {
                 name="fileUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>EA File URL</FormLabel>
+                    <FormLabel>EA/Signal File</FormLabel>
                     <FormControl>
-                      <Input 
-                        placeholder="https://example.com/files/ea.zip" 
-                        {...field} 
-                        data-testid="input-file-url"
+                      <FileUpload
+                        type="ea"
+                        value={field.value}
+                        onChange={(fileUrl, fileInfo) => {
+                          field.onChange(fileUrl);
+                          // You can store additional file info if needed
+                          console.log('EA file uploaded:', fileInfo);
+                        }}
+                        onDelete={() => field.onChange('')}
+                        disabled={isSubmitting}
                       />
                     </FormControl>
-                    <FormDescription>Direct download link to the EA file</FormDescription>
+                    <FormDescription>Upload the EA file (.ex4, .ex5, .mq4, .mq5) - Max 50MB</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -616,15 +623,21 @@ export default function SignalEditor() {
                 name="previewImage"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Preview Image URL</FormLabel>
+                    <FormLabel>Preview Image (Optional)</FormLabel>
                     <FormControl>
-                      <Input 
-                        placeholder="https://example.com/images/preview.jpg" 
-                        {...field} 
-                        data-testid="input-preview-image"
+                      <FileUpload
+                        type="image"
+                        value={field.value}
+                        onChange={(imageUrl, imageInfo) => {
+                          field.onChange(imageUrl);
+                          // You can store additional image info if needed
+                          console.log('Preview image uploaded:', imageInfo);
+                        }}
+                        onDelete={() => field.onChange('')}
+                        disabled={isSubmitting}
                       />
                     </FormControl>
-                    <FormDescription>Screenshot or chart showing the EA in action</FormDescription>
+                    <FormDescription>Upload a screenshot or preview image - Max 5MB</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

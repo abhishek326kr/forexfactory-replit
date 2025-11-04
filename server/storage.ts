@@ -97,6 +97,10 @@ export interface IStorage {
   getMostDownloadedSignals(limit?: number): Promise<Signal[]>;
   getSignalsByCategory(categoryId: number, options?: PaginationOptions): Promise<PaginatedResult<Signal>>;
   searchSignals(query: string, options?: PaginationOptions): Promise<PaginatedResult<Signal>>;
+  
+  // File management for signals
+  deleteSignalFiles(signalId: number): Promise<void>;
+  updateSignalFileInfo(id: number, fileInfo: { fileUrl?: string; previewImage?: string; fileSize?: number; uploadedAt?: Date }): Promise<Signal | undefined>;
 
   // ============================================
   // CATEGORY MANAGEMENT
@@ -706,6 +710,34 @@ export class MemStorage implements IStorage {
       hasNextPage: page < Math.ceil(total / limit),
       hasPreviousPage: page > 1
     };
+  }
+
+  async deleteSignalFiles(signalId: number): Promise<void> {
+    // In MemStorage, we don't actually delete files, but in a real implementation
+    // this would delete the associated files from the filesystem
+    const signal = this.signals.get(signalId);
+    if (signal) {
+      if (signal.fileUrl) {
+        console.log(`Would delete file: ${signal.fileUrl}`);
+      }
+      if (signal.previewImage) {
+        console.log(`Would delete preview: ${signal.previewImage}`);
+      }
+    }
+  }
+
+  async updateSignalFileInfo(id: number, fileInfo: { fileUrl?: string; previewImage?: string; fileSize?: number; uploadedAt?: Date }): Promise<Signal | undefined> {
+    const signal = this.signals.get(id);
+    if (!signal) return undefined;
+    
+    const updated = { 
+      ...signal,
+      ...fileInfo,
+      updatedAt: new Date()
+    };
+    
+    this.signals.set(id, updated);
+    return updated;
   }
 
   // ============================================

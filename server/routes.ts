@@ -28,6 +28,21 @@ import MemoryStore from "memorystore";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
+import multer from "multer";
+import path from "path";
+import fs from "fs/promises";
+import { 
+  generateUniqueFilename,
+  formatFileSize,
+  validateFileType,
+  validateFileSize,
+  scanForMaliciousPatterns,
+  ensureDirectoryExists,
+  getFileMetadata,
+  deleteFileSafely,
+  getEAMimeType,
+  FILE_TYPES
+} from "./file-utils";
 
 // Dynamic storage selection based on database availability
 let storage: IStorage = memStorage;
@@ -269,6 +284,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize passport
   app.use(passport.initialize());
   app.use(passport.session());
+
+  // ==================== FILE UPLOAD CONFIGURATION ====================
+  
+  // Ensure upload directories exist
+  await ensureDirectoryExists('./server/uploads/signals');
+  await ensureDirectoryExists('./server/uploads/previews');
+  await ensureDirectoryExists('./server/uploads/media');
+
+  // Configure multer storage for different file types
+  const signalStorage = multer.diskStorage({
+    destination: async (req, file, cb) => {
+      const uploadPath = './server/uploads/signals';
+      await ensureDirectoryExists(uploadPath);
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      const uniqueFilename = generateUniqueFilename(file.originalname);
+      cb(null, uniqueFilename);
+    }
+  });
+
+  const previewStorage = multer.diskStorage({
+    destination: async (req, file, cb) => {
+      const uploadPath = './server/uploads/previews';
+      await ensureDirectoryExists(uploadPath);
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      const uniqueFilename = generateUniqueFilename(file.originalname);
+      cb(null, uniqueFilename);
+    }
+  });
+
+  const mediaStorage = multer.diskStorage({
+    destination: async (req, file, cb) => {
+      const uploadPath = './server/uploads/media';
+      await ensureDirectoryExists(uploadPath);
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      const uniqueFilename = generateUniqueFilename(file.originalname);
+      cb(null, uniqueFilename);
+    }
+  });
+
+  // Create multer instances with file validation
+  const signalUpload = multer({
+    storage: signalStorage,
+    limits: {
+      fileSize: FILE_TYPES.EA.maxSize
+    },
+    fileFilter: (req, file, cb) => {
+      // Validate file type
+      if (!validateFileType(file.originalname, 'EA')) {
+        return cb(new Error('Invalid file type. Only .ex4, .ex5, .mq4, .mq5 files are allowed'));
+      }
+      
+      // Scan for malicious patterns
+      const scanResult = scanForMaliciousPatterns(file.originalname);
+      if (!scanResult.safe) {
+        return cb(new Error(scanResult.reason || 'File failed security scan'));
+      }
+      
+      cb(null, true);
+    }
+  });
+
+  const imageUpload = multer({
+    storage: previewStorage,
+    limits: {
+      fileSize: FILE_TYPES.IMAGE.maxSize
+    },
+    fileFilter: (req, file, cb) => {
+      // Validate file type
+      if (!validateFileType(file.originalname, 'IMAGE')) {
+        return cb(new Error('Invalid file type. Only image files are allowed'));
+      }
+      
+      // Scan for malicious patterns
+      const scanResult = scanForMaliciousPatterns(file.originalname);
+      if (!scanResult.safe) {
+        return cb(new Error(scanResult.reason || 'File failed security scan'));
+      }
+      
+      cb(null, true);
+    }
+  });
+
+  const mediaUpload = multer({
+    storage: mediaStorage,
+    limits: {
+      fileSize: 10 * 1024 * 1024 // 10MB for general media
+    },
+    fileFilter: (req, file, cb) => {
+      // Allow images and documents
+      const isImage = validateFileType(file.originalname, 'IMAGE');
+      const isDocument = validateFileType(file.originalname, 'DOCUMENT');
+      
+      if (!isImage && !isDocument) {
+        return cb(new Error('Invalid file type'));
+      }
+      
+      // Scan for malicious patterns
+      const scanResult = scanForMaliciousPatterns(file.originalname);
+      if (!scanResult.safe) {
+        return cb(new Error(scanResult.reason || 'File failed security scan'));
+      }
+      
+      cb(null, true);
+    }
+  });
+
+  // Serve static files from uploads directory with security headers
+  app.use('/uploads', (req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    
+    // Set appropriate MIME types for EA files
+    const ext = path.extname(req.path).toLowerCase();
+    if (['.ex4', '.ex5', '.mq4', '.mq5'].includes(ext)) {
+      res.setHeader('Content-Type', getEAMimeType(req.path));
+      res.setHeader('Content-Disposition', 'attachment');
+    }
+    
+    next();
+  }, express.static(path.join(__dirname, 'uploads'), {
+    maxAge: '1d',
+    etag: true,
+    lastModified: true,
+    index: false,
+    dotfiles: 'deny'
+  }));
 
   // Set CORS headers for all API routes
   app.use('/api', (req, res, next) => {
@@ -2643,6 +2791,205 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error fetching signals by platform:", error);
       res.status(500).json({ error: "Failed to fetch signals", message: error.message });
+    }
+  });
+
+  // ==================== FILE UPLOAD ENDPOINTS ====================
+  
+  // POST /api/admin/signals/upload - Upload EA/Signal file (auth required)
+  app.post("/api/admin/signals/upload", 
+    requireAdmin, 
+    uploadLimiter,
+    signalUpload.single('file'),
+    async (req: Request, res: Response) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ error: "No file uploaded" });
+        }
+
+        const file = req.file;
+        const metadata = await getFileMetadata(file.path);
+        
+        if (!metadata) {
+          return res.status(500).json({ error: "Failed to get file metadata" });
+        }
+
+        // Return file information
+        const fileInfo = {
+          filename: file.filename,
+          originalName: file.originalname,
+          size: formatFileSize(file.size),
+          sizeBytes: file.size,
+          path: `/uploads/signals/${file.filename}`,
+          uploadedAt: new Date(),
+          mimeType: getEAMimeType(file.originalname),
+          extension: path.extname(file.originalname)
+        };
+
+        res.json({ 
+          success: true, 
+          file: fileInfo,
+          message: "EA file uploaded successfully"
+        });
+      } catch (error: any) {
+        console.error("Error uploading EA file:", error);
+        
+        // Clean up file on error
+        if (req.file) {
+          await deleteFileSafely(req.file.path);
+        }
+        
+        res.status(500).json({ 
+          error: "Failed to upload file", 
+          message: error.message 
+        });
+      }
+    }
+  );
+
+  // POST /api/admin/signals/upload-preview - Upload preview image (auth required)
+  app.post("/api/admin/signals/upload-preview",
+    requireAdmin,
+    uploadLimiter,
+    imageUpload.single('image'),
+    async (req: Request, res: Response) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ error: "No image uploaded" });
+        }
+
+        const file = req.file;
+        
+        // Return image information
+        const imageInfo = {
+          filename: file.filename,
+          originalName: file.originalname,
+          size: formatFileSize(file.size),
+          sizeBytes: file.size,
+          path: `/uploads/previews/${file.filename}`,
+          uploadedAt: new Date(),
+          mimeType: file.mimetype,
+          extension: path.extname(file.originalname)
+        };
+
+        res.json({
+          success: true,
+          image: imageInfo,
+          message: "Preview image uploaded successfully"
+        });
+      } catch (error: any) {
+        console.error("Error uploading preview image:", error);
+        
+        // Clean up file on error
+        if (req.file) {
+          await deleteFileSafely(req.file.path);
+        }
+        
+        res.status(500).json({
+          error: "Failed to upload image",
+          message: error.message
+        });
+      }
+    }
+  );
+
+  // POST /api/admin/media/upload - Upload general media files (auth required)
+  app.post("/api/admin/media/upload",
+    requireAdmin,
+    uploadLimiter,
+    mediaUpload.array('files', 10), // Allow up to 10 files at once
+    async (req: Request, res: Response) => {
+      try {
+        if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
+          return res.status(400).json({ error: "No files uploaded" });
+        }
+
+        const uploadedFiles = await Promise.all(
+          req.files.map(async (file) => {
+            const metadata = await getFileMetadata(file.path);
+            return {
+              filename: file.filename,
+              originalName: file.originalname,
+              size: formatFileSize(file.size),
+              sizeBytes: file.size,
+              path: `/uploads/media/${file.filename}`,
+              uploadedAt: new Date(),
+              mimeType: file.mimetype,
+              extension: path.extname(file.originalname)
+            };
+          })
+        );
+
+        res.json({
+          success: true,
+          files: uploadedFiles,
+          message: `${uploadedFiles.length} files uploaded successfully`
+        });
+      } catch (error: any) {
+        console.error("Error uploading media files:", error);
+        
+        // Clean up files on error
+        if (req.files && Array.isArray(req.files)) {
+          for (const file of req.files) {
+            await deleteFileSafely(file.path);
+          }
+        }
+        
+        res.status(500).json({
+          error: "Failed to upload files",
+          message: error.message
+        });
+      }
+    }
+  );
+
+  // DELETE /api/admin/uploads/:type/:filename - Delete uploaded file (auth required)
+  app.delete("/api/admin/uploads/:type/:filename", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { type, filename } = req.params;
+      
+      // Validate type
+      if (!['signals', 'previews', 'media'].includes(type)) {
+        return res.status(400).json({ error: "Invalid file type" });
+      }
+      
+      const filePath = path.join(__dirname, 'uploads', type, filename);
+      const success = await deleteFileSafely(filePath);
+      
+      if (!success) {
+        return res.status(404).json({ error: "File not found or could not be deleted" });
+      }
+      
+      res.json({ success: true, message: "File deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting file:", error);
+      res.status(500).json({ error: "Failed to delete file", message: error.message });
+    }
+  });
+
+  // GET /api/admin/uploads/cleanup - Clean up old unused files (auth required)
+  app.get("/api/admin/uploads/cleanup", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const daysOld = parseInt(req.query.days as string) || 30;
+      
+      const signalsDeleted = await cleanupOldFiles(path.join(__dirname, 'uploads/signals'), daysOld);
+      const previewsDeleted = await cleanupOldFiles(path.join(__dirname, 'uploads/previews'), daysOld);
+      const mediaDeleted = await cleanupOldFiles(path.join(__dirname, 'uploads/media'), daysOld);
+      
+      const totalDeleted = signalsDeleted + previewsDeleted + mediaDeleted;
+      
+      res.json({
+        success: true,
+        message: `Cleaned up ${totalDeleted} old files`,
+        details: {
+          signals: signalsDeleted,
+          previews: previewsDeleted,
+          media: mediaDeleted
+        }
+      });
+    } catch (error: any) {
+      console.error("Error cleaning up files:", error);
+      res.status(500).json({ error: "Failed to clean up files", message: error.message });
     }
   });
 
