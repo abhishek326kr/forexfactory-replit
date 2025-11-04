@@ -237,29 +237,73 @@ passport.serializeUser((user: any, done) => {
 // Deserialize user from session
 passport.deserializeUser(async (id: string, done) => {
   try {
-    const admin = await prisma.admin.findUnique({
-      where: { id: parseInt(id) }
-    });
+    // Check if database is connected
+    const isDbConnected = await isDatabaseConnected();
     
-    if (!admin) {
-      return done(null, false);
+    if (isDbConnected) {
+      // Try to get user from database
+      const admin = await prisma.admin.findUnique({
+        where: { id: parseInt(id) }
+      });
+      
+      if (!admin) {
+        return done(null, false);
+      }
+      
+      const user: User = {
+        id: admin.id.toString(),
+        email: admin.email,
+        username: admin.username,
+        password: admin.password,
+        role: admin.role === 'admin' ? 'admin' : 'user',
+        avatar: admin.profilePic,
+        bio: null,
+        createdAt: admin.createdAt,
+        updatedAt: admin.updatedAt || new Date()
+      };
+      
+      done(null, user);
+    } else {
+      // Database not available, check if it's the dev fallback user
+      if (id === '1' && process.env.NODE_ENV !== 'production') {
+        console.log('⚠️ Using development fallback admin for deserialization');
+        const testUser: User = {
+          id: '1',
+          email: 'admin@example.com',
+          username: 'admin',
+          password: await bcrypt.hash('password123', 10),
+          role: 'admin',
+          avatar: null,
+          bio: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        done(null, testUser);
+      } else {
+        return done(null, false);
+      }
     }
+  } catch (error: any) {
+    console.error('Error deserializing user:', error.message);
     
-    const user: User = {
-      id: admin.id.toString(),
-      email: admin.email,
-      username: admin.username,
-      password: admin.password,
-      role: admin.role === 'admin' ? 'admin' : 'user',
-      avatar: admin.profilePic,
-      bio: null,
-      createdAt: admin.createdAt,
-      updatedAt: admin.updatedAt || new Date()
-    };
-    
-    done(null, user);
-  } catch (error) {
-    done(error);
+    // Fallback for development environment
+    if (id === '1' && process.env.NODE_ENV !== 'production' && error.message?.includes("Can't reach database server")) {
+      console.log('⚠️ Database error, using development fallback admin for deserialization');
+      const testUser: User = {
+        id: '1',
+        email: 'admin@example.com',
+        username: 'admin',
+        password: await bcrypt.hash('password123', 10),
+        role: 'admin',
+        avatar: null,
+        bio: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      done(null, testUser);
+    } else {
+      done(error);
+    }
   }
 });
 
