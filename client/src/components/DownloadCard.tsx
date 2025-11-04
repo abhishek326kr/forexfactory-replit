@@ -9,14 +9,14 @@ interface DownloadCardProps {
   name: string;
   description: string;
   version: string;
-  compatibility: ('MT4' | 'MT5')[];
-  downloads: number;
-  rating: number;
+  compatibility: ('MT4' | 'MT5')[] | string | null | undefined;
+  downloads: number | null | undefined;
+  rating: number | null | undefined;
   lastUpdated: string;
   image: string;
   fileSize: string;
   isPremium?: boolean;
-  features?: string[];
+  features?: string[] | string | null | undefined;
 }
 
 export default function DownloadCard({
@@ -31,13 +31,34 @@ export default function DownloadCard({
   image,
   fileSize,
   isPremium = false,
-  features = [],
+  features,
 }: DownloadCardProps) {
-  const formatDownloads = (num: number) => {
+  const formatDownloads = (num: number | null | undefined) => {
+    if (!num || typeof num !== 'number') return '0';
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
     if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
     return num.toString();
   };
+
+  // Helper function to safely parse array fields that might be JSON strings
+  const parseArrayField = <T,>(field: T[] | string | null | undefined): T[] => {
+    if (!field) return [];
+    if (Array.isArray(field)) return field;
+    if (typeof field === 'string') {
+      try {
+        const parsed = JSON.parse(field);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        // If JSON parsing fails, treat as a comma-separated string or return empty
+        return field.includes(',') ? field.split(',').map(item => item.trim()) as T[] : [];
+      }
+    }
+    return [];
+  };
+
+  // Safely parse compatibility and features
+  const safeCompatibility = parseArrayField<'MT4' | 'MT5'>(compatibility);
+  const safeFeatures = parseArrayField<string>(features);
 
   return (
     <Card className="h-full flex flex-col hover-elevate active-elevate-2 transition-all duration-200" data-testid={`card-download-${id}`}>
@@ -54,7 +75,7 @@ export default function DownloadCard({
           </Badge>
         )}
         <div className="absolute top-4 left-4 flex gap-2">
-          {compatibility.map((platform) => (
+          {safeCompatibility.map((platform) => (
             <Badge key={platform} variant="secondary">
               {platform}
             </Badge>
@@ -85,7 +106,7 @@ export default function DownloadCard({
           </div>
           <div className="flex items-center space-x-1.5">
             <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-            <span className="text-sm font-medium">{rating.toFixed(1)}</span>
+            <span className="text-sm font-medium">{(rating ?? 0).toFixed(1)}</span>
           </div>
           <div className="flex items-center space-x-1.5">
             <Calendar className="w-4 h-4 text-muted-foreground" />
@@ -98,9 +119,9 @@ export default function DownloadCard({
         </div>
 
         {/* Features */}
-        {features.length > 0 && (
+        {safeFeatures.length > 0 && (
           <div className="space-y-1">
-            {features.slice(0, 3).map((feature, index) => (
+            {safeFeatures.slice(0, 3).map((feature, index) => (
               <div key={index} className="flex items-center space-x-1.5">
                 <CheckCircle className="w-3 h-3 text-green-500" />
                 <span className="text-xs text-muted-foreground">{feature}</span>
