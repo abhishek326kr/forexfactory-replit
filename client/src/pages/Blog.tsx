@@ -26,43 +26,48 @@ export default function Blog() {
   const [page, setPage] = useState(1);
   const postsPerPage = 9;
 
-  // Fetch posts
-  const { data: postsData, isLoading: postsLoading } = useQuery({
-    queryKey: ['/api/posts', category, searchQuery, selectedTag, sortBy, page],
-    select: (data: any) => {
-      let posts = data?.data || [];
+  // Fetch posts from real API with server-side pagination and filtering
+  const { data: postsData, isLoading: postsLoading, error: postsError } = useQuery({
+    queryKey: ['/api/blogs', category, searchQuery, selectedTag, sortBy, page],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('limit', postsPerPage.toString());
+      params.append('sortBy', 'createdAt');
+      params.append('sortOrder', sortBy === 'oldest' ? 'asc' : 'desc');
       
-      // Filter by category if provided
-      if (category) {
-        posts = posts.filter((p: any) => p.category?.toLowerCase() === category.toLowerCase());
-      }
-      
-      // Filter by search query
       if (searchQuery) {
-        posts = posts.filter((p: any) => 
-          p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          p.excerpt?.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+        params.append('search', searchQuery);
       }
       
-      // Filter by tag
+      if (category) {
+        // First get category ID
+        const catResponse = await fetch('/api/categories');
+        const categories = await catResponse.json();
+        const categoryObj = categories.find((c: any) => c.name.toLowerCase() === category.toLowerCase());
+        if (categoryObj) {
+          params.append('category', categoryObj.id);
+        }
+      }
+      
       if (selectedTag) {
-        posts = posts.filter((p: any) => p.tags?.includes(selectedTag));
+        params.append('tags', selectedTag);
       }
       
-      // Sort posts
-      if (sortBy === 'oldest') {
-        posts = [...posts].reverse();
+      const response = await fetch(`/api/blogs?${params.toString()}`);
+      if (!response.ok) {
+        // Fallback to posts endpoint
+        const fallbackResponse = await fetch(`/api/posts?${params.toString()}`);
+        if (!fallbackResponse.ok) throw new Error('Failed to fetch blogs');
+        return fallbackResponse.json();
       }
-      
-      // Pagination
-      const startIndex = (page - 1) * postsPerPage;
-      const paginatedPosts = posts.slice(startIndex, startIndex + postsPerPage);
-      
+      return response.json();
+    },
+    select: (data: any) => {
       return {
-        posts: paginatedPosts,
-        total: posts.length,
-        totalPages: Math.ceil(posts.length / postsPerPage)
+        posts: data?.data || [],
+        total: data?.total || 0,
+        totalPages: data?.totalPages || Math.ceil((data?.total || 0) / postsPerPage)
       };
     }
   });

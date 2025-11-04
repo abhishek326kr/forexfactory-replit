@@ -6,8 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("MYSQL_DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Admin {
@@ -98,7 +98,7 @@ model PasswordResetToken {
   userId    Int      @map("user_id")
   token     String   @db.VarChar(64)
   expiresAt DateTime @map("expires_at")
-  used      Int?     @default(0) @db.TinyInt
+  used      Int?     @default(0)
   createdAt DateTime? @default(now()) @map("created_at")
 
   @@map("password_reset_tokens")
@@ -146,13 +146,13 @@ model SeoMeta {
 }
 
 model Signal {
-  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  id          Int      @id @default(autoincrement())
   uuid        String   @db.VarChar(32)
   title       String   @db.VarChar(255)
-  description String   @db.MediumText
+  description String   @db.Text
   filePath    String   @map("file_path") @db.VarChar(500)
   mime        String   @db.VarChar(100)
-  sizeBytes   Int      @map("size_bytes") @db.UnsignedInt
+  sizeBytes   Int      @map("size_bytes")
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([createdAt], name: "created_at_idx")

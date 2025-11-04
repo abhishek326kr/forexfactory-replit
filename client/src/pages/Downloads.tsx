@@ -28,60 +28,62 @@ export default function Downloads() {
   const [page, setPage] = useState(1);
   const downloadsPerPage = 12;
 
-  // Fetch downloads
-  const { data: downloadsData, isLoading } = useQuery({
-    queryKey: ['/api/downloads', searchQuery, platform, strategy, minRating, sortBy, page],
-    select: (data: any) => {
-      let downloads = data?.data || [];
+  // Fetch signals (downloads) from real API with server-side pagination and filtering
+  const { data: downloadsData, isLoading, error: downloadsError } = useQuery({
+    queryKey: ['/api/signals', searchQuery, platform, strategy, minRating, sortBy, page],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('limit', downloadsPerPage.toString());
       
-      // Filter by search query
+      // Sort parameters
+      if (sortBy === 'newest') {
+        params.append('sortBy', 'createdAt');
+        params.append('sortOrder', 'desc');
+      } else if (sortBy === 'rating') {
+        params.append('sortBy', 'rating');
+        params.append('sortOrder', 'desc');
+      } else if (sortBy === 'downloads') {
+        params.append('sortBy', 'downloadCount');
+        params.append('sortOrder', 'desc');
+      }
+      
+      // Filters
       if (searchQuery) {
-        downloads = downloads.filter((d: any) => 
-          d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          d.description?.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+        params.append('search', searchQuery);
       }
       
-      // Filter by platform
       if (platform !== 'all') {
-        downloads = downloads.filter((d: any) => d.platform === platform);
+        const platformMap: { [key: string]: string } = {
+          'mt4': 'MT4',
+          'mt5': 'MT5',
+          'both': 'Both'
+        };
+        params.append('platform', platformMap[platform] || platform);
       }
       
-      // Filter by strategy
       if (strategy !== 'all') {
-        downloads = downloads.filter((d: any) => d.strategy === strategy);
+        params.append('strategy', strategy);
       }
       
-      // Filter by minimum rating
-      downloads = downloads.filter((d: any) => (d.rating || 0) >= minRating[0]);
-      
-      // Sort downloads
-      switch (sortBy) {
-        case 'newest':
-          downloads = [...downloads].sort((a: any, b: any) => 
-            new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-          );
-          break;
-        case 'rating':
-          downloads = [...downloads].sort((a: any, b: any) => (b.rating || 0) - (a.rating || 0));
-          break;
-        case 'downloads':
-          downloads = [...downloads].sort((a: any, b: any) => (b.downloads || 0) - (a.downloads || 0));
-          break;
-        default: // popular
-          downloads = [...downloads].sort((a: any, b: any) => 
-            ((b.downloads || 0) + (b.rating || 0) * 100) - ((a.downloads || 0) + (a.rating || 0) * 100)
-          );
+      if (minRating[0] > 0) {
+        params.append('minRating', minRating[0].toString());
       }
       
-      // Pagination
-      const startIndex = (page - 1) * downloadsPerPage;
-      const paginatedDownloads = downloads.slice(startIndex, startIndex + downloadsPerPage);
-      
+      const response = await fetch(`/api/signals?${params.toString()}`);
+      if (!response.ok) {
+        // Fallback to downloads endpoint
+        const fallbackResponse = await fetch(`/api/downloads?${params.toString()}`);
+        if (!fallbackResponse.ok) throw new Error('Failed to fetch signals');
+        return fallbackResponse.json();
+      }
+      return response.json();
+    },
+    select: (data: any) => {
       return {
-        downloads: paginatedDownloads,
-        total: downloads.length,
-        totalPages: Math.ceil(downloads.length / downloadsPerPage)
+        downloads: data?.data || [],
+        total: data?.total || 0,
+        totalPages: data?.totalPages || Math.ceil((data?.total || 0) / downloadsPerPage)
       };
     }
   });

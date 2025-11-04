@@ -1,4 +1,4 @@
-import type { Express, Request, Response, NextFunction } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage as memStorage, type IStorage } from "./storage";
 import { prismaStorage } from "./prisma-storage";
@@ -30,6 +30,7 @@ import crypto from "crypto";
 import bcrypt from "bcrypt";
 import multer from "multer";
 import path from "path";
+import { fileURLToPath } from 'url';
 import fs from "fs/promises";
 import { 
   generateUniqueFilename,
@@ -410,7 +411,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     next();
-  }, express.static(path.join(__dirname, 'uploads'), {
+  }, express.static(path.join(import.meta.dirname || '', 'uploads'), {
     maxAge: '1d',
     etag: true,
     lastModified: true,
