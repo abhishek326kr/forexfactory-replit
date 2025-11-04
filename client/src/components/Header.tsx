@@ -27,7 +27,7 @@ export default function Header() {
                 <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                   <TrendingUp className="w-5 h-5 text-primary-foreground" />
                 </div>
-                <span className="font-bold text-xl tracking-tight">Forex EA Hub</span>
+                <span className="font-bold text-xl tracking-tight">ForexFactory.cc</span>
               </div>
             </a>
           </Link>

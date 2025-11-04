@@ -1,0 +1,136 @@
+// This is your Prisma schema file
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("MYSQL_DATABASE_URL")
+}
+
+// Example schema - will be replaced with your actual database schema
+// When you provide your database schema, we'll update these models
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  username  String   @unique
+  password  String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  posts     Post[]
+  downloads Download[]
+  
+  @@map("users")
+}
+
+model Post {
+  id           String   @id @default(uuid())
+  title        String
+  slug         String   @unique
+  content      String   @db.Text
+  excerpt      String   @db.Text
+  featuredImage String?
+  published    Boolean  @default(false)
+  publishedAt  DateTime?
+  views        Int      @default(0)
+  
+  authorId     String
+  author       User     @relation(fields: [authorId], references: [id])
+  
+  categoryId   String?
+  category     Category? @relation(fields: [categoryId], references: [id])
+  
+  tags         PostTag[]
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@index([slug])
+  @@index([published])
+  @@map("posts")
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?  @db.Text
+  
+  posts       Post[]
+  downloads   Download[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("categories")
+}
+
+model Tag {
+  id    String   @id @default(uuid())
+  name  String   @unique
+  slug  String   @unique
+  
+  posts PostTag[]
+  
+  @@map("tags")
+}
+
+model PostTag {
+  postId String
+  tagId  String
+  
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  
+  @@id([postId, tagId])
+  @@map("post_tags")
+}
+
+model Download {
+  id             String   @id @default(uuid())
+  name           String
+  description    String   @db.Text
+  version        String
+  fileUrl        String
+  fileSize       String
+  compatibility  Json     // ["MT4", "MT5"]
+  downloadCount  Int      @default(0)
+  rating         Float    @default(0)
+  ratingCount    Int      @default(0)
+  isPremium      Boolean  @default(false)
+  features       Json?    // Array of features
+  
+  categoryId     String?
+  category       Category? @relation(fields: [categoryId], references: [id])
+  
+  uploadedById   String
+  uploadedBy     User     @relation(fields: [uploadedById], references: [id])
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@index([downloadCount])
+  @@map("downloads")
+}
+
+model Newsletter {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  subscribed Boolean  @default(true)
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  @@map("newsletter_subscribers")
+}
+
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
