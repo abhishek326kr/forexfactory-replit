@@ -1,353 +1,447 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp, jsonb, real, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { 
+  mysqlTable, 
+  varchar, 
+  int, 
+  text, 
+  timestamp, 
+  mysqlEnum, 
+  boolean, 
+  datetime,
+  tinyint,
+  mediumText,
+  index,
+  uniqueIndex,
+  primaryKey,
+  decimal
+} from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Users table with comprehensive fields
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: text("email").notNull().unique(),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-  role: varchar("role").notNull().default("user"), // user, admin, moderator
-  avatar: text("avatar"),
-  bio: text("bio"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
-}, (table) => ({
-  emailIdx: index("users_email_idx").on(table.email),
-  usernameIdx: index("users_username_idx").on(table.username),
-}));
+// ============================================
+// ENUMS
+// ============================================
 
-export const insertUserSchema = createInsertSchema(users).omit({ 
-  id: true, 
-  createdAt: true, 
-  updatedAt: true 
-}).extend({
-  email: z.string().email("Invalid email address"),
-  username: z.string().min(3, "Username must be at least 3 characters").max(50),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  role: z.string().optional(),
+// Admin roles enum
+export const adminRoleEnum = mysqlEnum('role', ['admin', 'editor']);
+
+// Blog status enum  
+export const blogStatusEnum = mysqlEnum('status', ['published', 'draft', 'archived']);
+
+// Category status enum
+export const categoryStatusEnum = mysqlEnum('status', ['active', 'inactive']);
+
+// Post status enum
+export const postStatusEnum = mysqlEnum('status', ['draft', 'published']);
+
+// Meta robots enum
+export const metaRobotsEnum = mysqlEnum('meta_robots', [
+  'index, follow',
+  'noindex, follow', 
+  'index, nofollow',
+  'noindex, nofollow'
+]);
+
+// User roles enum - extended with more roles
+export const userRoleEnum = mysqlEnum('role', ['viewer', 'user', 'editor', 'moderator', 'admin', 'super_admin']);
+
+// Signal platform enum
+export const signalPlatformEnum = mysqlEnum('platform', ['MT4', 'MT5', 'Both']);
+
+// Signal strategy enum
+export const signalStrategyEnum = mysqlEnum('strategy', [
+  'scalping',
+  'trend_following', 
+  'hedging',
+  'grid',
+  'martingale',
+  'breakout',
+  'range_trading',
+  'news_trading'
+]);
+
+// Comment status enum
+export const commentStatusEnum = mysqlEnum('status', ['pending', 'approved', 'spam', 'deleted']);
+
+// ============================================
+// TABLES
+// ============================================
+
+// Admins table
+export const admins = mysqlTable('admins', {
+  id: int('id').autoincrement().primaryKey(),
+  name: varchar('name', { length: 100 }).notNull(),
+  email: varchar('email', { length: 100 }).notNull().unique(),
+  username: varchar('username', { length: 50 }).notNull().unique(),
+  phone: varchar('phone', { length: 15 }),
+  password: varchar('password', { length: 255 }).notNull(),
+  role: adminRoleEnum.default('editor'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  profilePic: varchar('profile_pic', { length: 255 }),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow()
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+// Blogs table
+export const blogs = mysqlTable('blogs', {
+  id: int('id').autoincrement().primaryKey(),
+  title: varchar('title', { length: 255 }).notNull(),
+  seoSlug: varchar('seo_slug', { length: 255 }).notNull(),
+  status: blogStatusEnum.notNull().default('draft'),
+  views: int('views').default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  content: text('content').notNull(),
+  author: varchar('author', { length: 255 }).notNull(),
+  featuredImage: varchar('featured_image', { length: 255 }).notNull(),
+  tags: varchar('tags', { length: 255 }).notNull(),
+  categoryId: int('category_id').notNull(),
+  downloadLink: varchar('download_link', { length: 255 })
+});
 
-// Categories table with hierarchical support and SEO
-export const categories = pgTable("categories", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull().unique(),
-  slug: text("slug").notNull().unique(),
-  description: text("description"),
-  parentId: varchar("parent_id").references(() => categories.id),
-  order: integer("order").default(0),
-  // SEO fields
-  metaTitle: text("meta_title"),
-  metaDescription: text("meta_description"),
-  seoKeywords: text("seo_keywords"),
-  canonicalUrl: text("canonical_url"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
+// Categories table
+export const categories = mysqlTable('categories', {
+  categoryId: int('category_id').autoincrement().primaryKey(),
+  name: varchar('name', { length: 255 }).notNull().unique(),
+  description: text('description'),
+  status: categoryStatusEnum.default('active'),
+  parentId: int('parent_id'), // For hierarchical categories
+  slug: varchar('slug', { length: 255 }), // For SEO-friendly URLs
+  metaTitle: varchar('meta_title', { length: 255 }),
+  metaDescription: text('meta_description'),
+  order: int('order').default(0)
+});
+
+// Blog Categories junction table
+export const blogCategories = mysqlTable('blog_categories', {
+  blogId: int('blog_id').notNull().references(() => blogs.id, { onDelete: 'cascade' }),
+  categoryId: int('category_id').notNull().references(() => categories.categoryId, { onDelete: 'cascade' })
 }, (table) => ({
-  slugIdx: uniqueIndex("categories_slug_idx").on(table.slug),
-  parentIdx: index("categories_parent_idx").on(table.parentId),
+  pk: primaryKey({ columns: [table.blogId, table.categoryId] }),
 }));
 
-export const insertCategorySchema = createInsertSchema(categories).omit({ 
+// Comments table
+export const comments = mysqlTable('comments', {
+  id: int('id').autoincrement().primaryKey(),
+  postId: int('post_id').notNull().references(() => blogs.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 255 }).notNull(),
+  email: varchar('email', { length: 255 }).notNull(),
+  comment: text('comment').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  status: commentStatusEnum.default('pending'),
+  parentId: int('parent_id'), // For nested comments
+  userId: int('user_id'), // If registered user
+  approved: boolean('approved').default(false)
+});
+
+// Media table
+export const media = mysqlTable('media', {
+  id: int('id').autoincrement().primaryKey(),
+  fileName: varchar('file_name', { length: 255 }).notNull(),
+  filePath: varchar('file_path', { length: 255 }).notNull(),
+  uploadedBy: int('uploaded_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  uploadedAt: timestamp('uploaded_at').notNull().defaultNow(),
+  fileType: varchar('file_type', { length: 100 }),
+  fileSize: int('file_size'),
+  altText: varchar('alt_text', { length: 255 })
+});
+
+// Password Reset Tokens table
+export const passwordResetTokens = mysqlTable('password_reset_tokens', {
+  id: int('id').autoincrement().primaryKey(),
+  userId: int('user_id').notNull(),
+  token: varchar('token', { length: 64 }).notNull(),
+  expiresAt: datetime('expires_at').notNull(),
+  used: tinyint('used').default(0),
+  createdAt: timestamp('created_at').defaultNow()
+});
+
+// Posts table (separate from blogs for different content types)
+export const posts = mysqlTable('posts', {
+  id: int('id').autoincrement().primaryKey(),
+  title: varchar('title', { length: 255 }).notNull(),
+  slug: varchar('slug', { length: 255 }).notNull().unique(),
+  content: text('content').notNull(),
+  image: varchar('image', { length: 255 }),
+  authorId: int('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  category: varchar('category', { length: 100 }),
+  featuredImage: varchar('featured_image', { length: 255 }),
+  status: postStatusEnum.default('draft'),
+  metaTitle: varchar('meta_title', { length: 255 }),
+  metaDescription: text('meta_description'),
+  metaKeywords: text('meta_keywords'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow()
+});
+
+// SEO Meta table
+export const seoMeta = mysqlTable('seo_meta', {
+  id: int('id').autoincrement().primaryKey(),
+  postId: int('post_id').notNull().references(() => blogs.id, { onDelete: 'cascade' }),
+  seoTitle: varchar('seo_title', { length: 255 }),
+  seoDescription: text('seo_description'),
+  seoKeywords: text('seo_keywords'),
+  seoSlug: varchar('seo_slug', { length: 255 }),
+  canonicalUrl: varchar('canonical_url', { length: 255 }),
+  metaRobots: metaRobotsEnum.default('index, follow'),
+  ogTitle: varchar('og_title', { length: 255 }),
+  ogDescription: text('og_description'),
+  ogImage: varchar('og_image', { length: 255 }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
+  schemaType: varchar('schema_type', { length: 50 }).default('Article'),
+  twitterCard: varchar('twitter_card', { length: 50 }).default('summary_large_image')
+}, (table) => ({
+  postIdIdx: index('post_id_idx').on(table.postId),
+}));
+
+// Signals table (for Expert Advisors/Trading Signals)
+export const signals = mysqlTable('signals', {
+  id: int('id').autoincrement().primaryKey(),
+  uuid: varchar('uuid', { length: 32 }).notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: mediumText('description').notNull(),
+  filePath: varchar('file_path', { length: 500 }).notNull(),
+  mime: varchar('mime', { length: 100 }).notNull(),
+  sizeBytes: int('size_bytes').notNull(),
+  createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  // Extended fields for EA management
+  platform: signalPlatformEnum.default('Both'),
+  strategy: signalStrategyEnum,
+  version: varchar('version', { length: 20 }),
+  downloadCount: int('download_count').default(0),
+  rating: decimal('rating', { precision: 3, scale: 2 }).default('0.00'),
+  isPremium: boolean('is_premium').default(false),
+  price: decimal('price', { precision: 10, scale: 2 }),
+  compatibility: varchar('compatibility', { length: 255 }), // MT4 versions, MT5 versions
+  winRate: decimal('win_rate', { precision: 5, scale: 2 }),
+  profitFactor: decimal('profit_factor', { precision: 10, scale: 2 }),
+  maxDrawdown: decimal('max_drawdown', { precision: 5, scale: 2 }),
+  screenshots: text('screenshots'), // JSON array of screenshot URLs
+  requirements: text('requirements'),
+  features: text('features'), // JSON array of features
+  authorId: int('author_id'),
+  categoryId: int('category_id'),
+  status: varchar('status', { length: 20 }).default('active')
+}, (table) => ({
+  createdAtIdx: index('created_at_idx').on(table.createdAt),
+  platformIdx: index('platform_idx').on(table.platform),
+  strategyIdx: index('strategy_idx').on(table.strategy)
+}));
+
+// Users table
+export const users = mysqlTable('users', {
+  id: int('id').autoincrement().primaryKey(),
+  email: varchar('email', { length: 100 }).notNull().unique(),
+  password: varchar('password', { length: 255 }).notNull(),
+  role: userRoleEnum.default('viewer'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  phone: varchar('phone', { length: 20 }),
+  name: varchar('name', { length: 255 }),
+  countryCode: varchar('country_code', { length: 10 }).default('+91'),
+  country: varchar('country', { length: 50 }).default('IN'),
+  // Extended fields
+  username: varchar('username', { length: 50 }).unique(),
+  avatar: varchar('avatar', { length: 255 }),
+  bio: text('bio'),
+  subscriptionStatus: varchar('subscription_status', { length: 20 }).default('free'),
+  subscriptionEndDate: datetime('subscription_end_date'),
+  lastLogin: datetime('last_login'),
+  emailVerified: boolean('email_verified').default(false),
+  twoFactorEnabled: boolean('two_factor_enabled').default(false)
+});
+
+// Pages table (for static content)
+export const pages = mysqlTable('pages', {
+  id: int('id').autoincrement().primaryKey(),
+  title: varchar('title', { length: 255 }).notNull(),
+  slug: varchar('slug', { length: 255 }).notNull().unique(),
+  content: text('content').notNull(),
+  metaTitle: varchar('meta_title', { length: 255 }),
+  metaDescription: text('meta_description'),
+  metaKeywords: text('meta_keywords'),
+  status: varchar('status', { length: 20 }).default('published'),
+  template: varchar('template', { length: 50 }).default('default'),
+  parentId: int('parent_id'),
+  order: int('order').default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow()
+});
+
+// ============================================
+// SCHEMAS AND TYPES
+// ============================================
+
+// Admin schemas
+export const insertAdminSchema = createInsertSchema(admins).omit({
   id: true,
   createdAt: true,
   updatedAt: true
 }).extend({
-  name: z.string().min(1, "Category name is required"),
-  slug: z.string().min(1, "Slug is required").regex(/^[a-z0-9-]+$/, "Slug must be lowercase with hyphens"),
+  email: z.string().email("Invalid email address"),
+  username: z.string().min(3, "Username must be at least 3 characters").max(50),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  name: z.string().min(1, "Name is required"),
+  phone: z.string().optional()
+});
+
+export type InsertAdmin = z.infer<typeof insertAdminSchema>;
+export type Admin = typeof admins.$inferSelect;
+
+// Blog schemas
+export const insertBlogSchema = createInsertSchema(blogs).omit({
+  id: true,
+  createdAt: true,
+  views: true
+}).extend({
+  title: z.string().min(1, "Title is required").max(255),
+  seoSlug: z.string().min(1, "Slug is required").regex(/^[a-z0-9-]+$/, "Slug must be lowercase with hyphens"),
+  content: z.string().min(1, "Content is required"),
+  author: z.string().min(1, "Author is required"),
+  featuredImage: z.string().url("Invalid image URL"),
+  tags: z.string(),
+  categoryId: z.number().positive(),
+  downloadLink: z.string().url().optional(),
+  status: z.enum(['published', 'draft', 'archived']).optional()
+});
+
+export type InsertBlog = z.infer<typeof insertBlogSchema>;
+export type Blog = typeof blogs.$inferSelect;
+
+// Category schemas
+export const insertCategorySchema = createInsertSchema(categories).omit({
+  categoryId: true
+}).extend({
+  name: z.string().min(1, "Category name is required").max(255),
+  description: z.string().optional(),
+  slug: z.string().regex(/^[a-z0-9-]+$/, "Invalid slug format").optional(),
+  parentId: z.number().positive().optional(),
+  order: z.number().optional(),
+  status: z.enum(['active', 'inactive']).optional()
 });
 
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;
 
-// Tags table
-export const tags = pgTable("tags", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull().unique(),
-  slug: text("slug").notNull().unique(),
-  count: integer("count").default(0),
-  description: text("description"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
-}, (table) => ({
-  slugIdx: uniqueIndex("tags_slug_idx").on(table.slug),
-  countIdx: index("tags_count_idx").on(table.count),
-}));
-
-export const insertTagSchema = createInsertSchema(tags).omit({ 
+// Comment schemas
+export const insertCommentSchema = createInsertSchema(comments).omit({
   id: true,
-  count: true,
   createdAt: true,
-  updatedAt: true
+  approved: true
 }).extend({
-  name: z.string().min(1, "Tag name is required"),
-  slug: z.string().min(1).regex(/^[a-z0-9-]+$/),
-});
-
-export type InsertTag = z.infer<typeof insertTagSchema>;
-export type Tag = typeof tags.$inferSelect;
-
-// Blog posts table with comprehensive SEO fields
-export const posts = pgTable("posts", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  title: text("title").notNull(),
-  slug: text("slug").notNull().unique(),
-  content: text("content").notNull(),
-  excerpt: text("excerpt"),
-  featuredImage: text("featured_image"),
-  categoryId: varchar("category_id").references(() => categories.id),
-  authorId: varchar("author_id").references(() => users.id),
-  status: varchar("status").notNull().default("draft"), // draft, published, archived
-  published: boolean("published").default(false),
-  publishedAt: timestamp("published_at"),
-  views: integer("views").default(0),
-  readingTime: integer("reading_time"), // in minutes
-  // SEO fields
-  metaTitle: text("meta_title"),
-  metaDescription: text("meta_description"),
-  seoKeywords: text("seo_keywords"),
-  canonicalUrl: text("canonical_url"),
-  ogImage: text("og_image"),
-  // SEO schema data
-  schemaType: varchar("schema_type").default("Article"), // Article, NewsArticle, BlogPosting
-  structuredData: jsonb("structured_data"), // Additional JSON-LD data
-  // Timestamps
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
-}, (table) => ({
-  slugIdx: uniqueIndex("posts_slug_idx").on(table.slug),
-  publishedIdx: index("posts_published_idx").on(table.published),
-  publishedAtIdx: index("posts_published_at_idx").on(table.publishedAt),
-  categoryIdx: index("posts_category_idx").on(table.categoryId),
-  authorIdx: index("posts_author_idx").on(table.authorId),
-  viewsIdx: index("posts_views_idx").on(table.views),
-}));
-
-export const insertPostSchema = createInsertSchema(posts).omit({ 
-  id: true,
-  views: true,
-  createdAt: true,
-  updatedAt: true
-}).extend({
-  title: z.string().min(1, "Title is required"),
-  slug: z.string().min(1).regex(/^[a-z0-9-]+$/),
-  content: z.string().min(1, "Content is required"),
-  readingTime: z.number().optional(),
-});
-
-export type InsertPost = z.infer<typeof insertPostSchema>;
-export type Post = typeof posts.$inferSelect;
-
-// Post Tags junction table
-export const postTags = pgTable("post_tags", {
-  postId: varchar("post_id").notNull().references(() => posts.id),
-  tagId: varchar("tag_id").notNull().references(() => tags.id),
-}, (table) => ({
-  pk: uniqueIndex("post_tags_pk").on(table.postId, table.tagId),
-  postIdx: index("post_tags_post_idx").on(table.postId),
-  tagIdx: index("post_tags_tag_idx").on(table.tagId),
-}));
-
-// Downloads/Expert Advisors table with comprehensive fields
-export const downloads = pgTable("downloads", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
-  description: text("description").notNull(),
-  version: text("version").notNull(),
-  fileUrl: text("file_url").notNull(),
-  fileSize: text("file_size"),
-  compatibility: text("compatibility"), // MT4 1.4+, MT5 2.0+, etc
-  platform: text("platform").notNull(), // MT4, MT5, Both
-  strategy: text("strategy"), // Scalping, Trend, Grid, etc
-  categoryId: varchar("category_id").references(() => categories.id),
-  downloadCount: integer("download_count").default(0),
-  rating: real("rating").default(0),
-  status: varchar("status").notNull().default("active"), // active, inactive
-  isPremium: boolean("is_premium").default(false),
-  featuredImage: text("featured_image"),
-  screenshots: text("screenshots").array(),
-  requirements: text("requirements"),
-  features: text("features").array(),
-  // SEO fields
-  metaTitle: text("meta_title"),
-  metaDescription: text("meta_description"),
-  seoKeywords: text("seo_keywords"),
-  canonicalUrl: text("canonical_url"),
-  ogImage: text("og_image"),
-  // Performance metrics
-  winRate: real("win_rate"),
-  profitFactor: real("profit_factor"),
-  maxDrawdown: real("max_drawdown"),
-  // SEO schema data
-  structuredData: jsonb("structured_data"), // SoftwareApplication schema
-  // Timestamps
-  publishedAt: timestamp("published_at").default(sql`CURRENT_TIMESTAMP`),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
-}, (table) => ({
-  slugIdx: uniqueIndex("downloads_slug_idx").on(table.slug),
-  platformIdx: index("downloads_platform_idx").on(table.platform),
-  strategyIdx: index("downloads_strategy_idx").on(table.strategy),
-  categoryIdx: index("downloads_category_idx").on(table.categoryId),
-  downloadCountIdx: index("downloads_count_idx").on(table.downloadCount),
-  ratingIdx: index("downloads_rating_idx").on(table.rating),
-  isPremiumIdx: index("downloads_premium_idx").on(table.isPremium),
-}));
-
-export const insertDownloadSchema = createInsertSchema(downloads).omit({ 
-  id: true,
-  downloadCount: true,
-  rating: true,
-  publishedAt: true,
-  createdAt: true,
-  updatedAt: true
-}).extend({
+  postId: z.number().positive(),
   name: z.string().min(1, "Name is required"),
-  slug: z.string().min(1).regex(/^[a-z0-9-]+$/),
-  description: z.string().min(1, "Description is required"),
-  version: z.string().min(1, "Version is required"),
-  fileUrl: z.string().url("Invalid file URL"),
-  platform: z.enum(["MT4", "MT5", "Both"]),
-  isPremium: z.boolean().optional(),
-});
-
-export type InsertDownload = z.infer<typeof insertDownloadSchema>;
-export type Download = typeof downloads.$inferSelect;
-
-// Comments table for posts
-export const comments = pgTable("comments", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  postId: varchar("post_id").notNull().references(() => posts.id),
-  parentId: varchar("parent_id").references(() => comments.id),
-  userId: varchar("user_id").references(() => users.id),
-  authorName: text("author_name").notNull(),
-  authorEmail: text("author_email").notNull(),
-  content: text("content").notNull(),
-  approved: boolean("approved").default(false),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
-}, (table) => ({
-  postIdx: index("comments_post_idx").on(table.postId),
-  approvedIdx: index("comments_approved_idx").on(table.approved),
-  parentIdx: index("comments_parent_idx").on(table.parentId),
-}));
-
-export const insertCommentSchema = createInsertSchema(comments).omit({ 
-  id: true,
-  approved: true,
-  createdAt: true,
-  updatedAt: true
-}).extend({
-  authorName: z.string().min(1, "Author name is required"),
-  authorEmail: z.string().email("Invalid email"),
-  content: z.string().min(1, "Comment content is required"),
+  email: z.string().email("Invalid email"),
+  comment: z.string().min(1, "Comment is required"),
+  parentId: z.number().positive().optional(),
+  userId: z.number().positive().optional(),
+  status: z.enum(['pending', 'approved', 'spam', 'deleted']).optional()
 });
 
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type Comment = typeof comments.$inferSelect;
 
-// Analytics table for tracking
-export const analytics = pgTable("analytics", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  eventType: varchar("event_type").notNull(), // pageView, downloadEvent, searchQuery
-  pageUrl: text("page_url"),
-  referrer: text("referrer"),
-  userAgent: text("user_agent"),
-  ipAddress: text("ip_address"),
-  userId: varchar("user_id").references(() => users.id),
-  sessionId: text("session_id"),
-  // Event specific data
-  downloadId: varchar("download_id").references(() => downloads.id),
-  postId: varchar("post_id").references(() => posts.id),
-  searchQuery: text("search_query"),
-  searchResultsCount: integer("search_results_count"),
-  // Additional data
-  metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
-}, (table) => ({
-  eventTypeIdx: index("analytics_event_type_idx").on(table.eventType),
-  userIdx: index("analytics_user_idx").on(table.userId),
-  sessionIdx: index("analytics_session_idx").on(table.sessionId),
-  createdAtIdx: index("analytics_created_at_idx").on(table.createdAt),
-}));
-
-export const insertAnalyticsSchema = createInsertSchema(analytics).omit({ 
+// Media schemas
+export const insertMediaSchema = createInsertSchema(media).omit({
   id: true,
-  createdAt: true
+  uploadedAt: true
 }).extend({
-  eventType: z.enum(["pageView", "downloadEvent", "searchQuery"]),
+  fileName: z.string().min(1, "File name is required"),
+  filePath: z.string().min(1, "File path is required"),
+  uploadedBy: z.number().positive(),
+  fileType: z.string().optional(),
+  fileSize: z.number().positive().optional(),
+  altText: z.string().optional()
 });
 
-export type InsertAnalytics = z.infer<typeof insertAnalyticsSchema>;
-export type Analytics = typeof analytics.$inferSelect;
+export type InsertMedia = z.infer<typeof insertMediaSchema>;
+export type Media = typeof media.$inferSelect;
 
-// Newsletter subscribers (enhanced)
-export const newsletter = pgTable("newsletter", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: text("email").notNull().unique(),
-  name: text("name"),
-  preferences: jsonb("preferences"), // { categories: [], frequency: 'weekly' }
-  isActive: boolean("is_active").default(true),
-  confirmationToken: text("confirmation_token"),
-  confirmedAt: timestamp("confirmed_at"),
-  subscribedAt: timestamp("subscribed_at").default(sql`CURRENT_TIMESTAMP`),
-  unsubscribedAt: timestamp("unsubscribed_at"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
-}, (table) => ({
-  emailIdx: uniqueIndex("newsletter_email_idx").on(table.email),
-  activeIdx: index("newsletter_active_idx").on(table.isActive),
-  confirmedIdx: index("newsletter_confirmed_idx").on(table.confirmedAt),
-}));
-
-export const insertNewsletterSchema = createInsertSchema(newsletter).omit({ 
+// SEO Meta schemas
+export const insertSeoMetaSchema = createInsertSchema(seoMeta).omit({
   id: true,
-  subscribedAt: true,
-  unsubscribedAt: true,
   createdAt: true,
-  updatedAt: true,
-  confirmedAt: true,
-  confirmationToken: true
+  updatedAt: true
+}).extend({
+  postId: z.number().positive(),
+  seoTitle: z.string().max(255).optional(),
+  seoDescription: z.string().max(160, "SEO description should be under 160 characters").optional(),
+  seoKeywords: z.string().optional(),
+  seoSlug: z.string().regex(/^[a-z0-9-]+$/).optional(),
+  canonicalUrl: z.string().url().optional(),
+  ogTitle: z.string().max(255).optional(),
+  ogDescription: z.string().optional(),
+  ogImage: z.string().url().optional(),
+  metaRobots: z.enum(['index, follow', 'noindex, follow', 'index, nofollow', 'noindex, nofollow']).optional()
+});
+
+export type InsertSeoMeta = z.infer<typeof insertSeoMetaSchema>;
+export type SeoMeta = typeof seoMeta.$inferSelect;
+
+// Signal schemas (Expert Advisors)
+export const insertSignalSchema = createInsertSchema(signals).omit({
+  id: true,
+  createdAt: true,
+  downloadCount: true,
+  rating: true,
+  status: true
+}).extend({
+  uuid: z.string().length(32, "UUID must be 32 characters"),
+  title: z.string().min(1, "Title is required").max(255),
+  description: z.string().min(1, "Description is required"),
+  filePath: z.string().min(1, "File path is required").max(500),
+  mime: z.string().min(1, "MIME type is required"),
+  sizeBytes: z.number().positive("File size must be positive"),
+  platform: z.enum(['MT4', 'MT5', 'Both']).optional(),
+  strategy: z.enum([
+    'scalping',
+    'trend_following', 
+    'hedging',
+    'grid',
+    'martingale',
+    'breakout',
+    'range_trading',
+    'news_trading'
+  ]).optional(),
+  version: z.string().optional(),
+  isPremium: z.boolean().optional(),
+  price: z.number().positive().optional(),
+  compatibility: z.string().optional(),
+  winRate: z.number().min(0).max(100).optional(),
+  profitFactor: z.number().positive().optional(),
+  maxDrawdown: z.number().min(0).max(100).optional(),
+  screenshots: z.string().optional(),
+  requirements: z.string().optional(),
+  features: z.string().optional(),
+  authorId: z.number().positive().optional(),
+  categoryId: z.number().positive().optional()
+});
+
+export type InsertSignal = z.infer<typeof insertSignalSchema>;
+export type Signal = typeof signals.$inferSelect;
+
+// User schemas
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  emailVerified: true,
+  twoFactorEnabled: true
 }).extend({
   email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
   name: z.string().optional(),
-  isActive: z.boolean().optional(),
+  phone: z.string().optional(),
+  countryCode: z.string().default('+91'),
+  country: z.string().default('IN'),
+  username: z.string().min(3).max(50).optional(),
+  bio: z.string().optional(),
+  role: z.enum(['viewer', 'user', 'editor', 'moderator', 'admin', 'super_admin']).optional(),
+  subscriptionStatus: z.enum(['free', 'basic', 'premium', 'enterprise']).optional()
 });
 
-export type InsertNewsletter = z.infer<typeof insertNewsletterSchema>;
-export type Newsletter = typeof newsletter.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
 
-// Pages table for static pages
-export const pages = pgTable("pages", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  title: text("title").notNull(),
-  slug: text("slug").notNull().unique(),
-  content: text("content").notNull(),
-  template: varchar("template").default("default"), // default, landing, contact
-  status: varchar("status").notNull().default("published"),
-  // SEO fields
-  metaTitle: text("meta_title"),
-  metaDescription: text("meta_description"),
-  seoKeywords: text("seo_keywords"),
-  canonicalUrl: text("canonical_url"),
-  ogImage: text("og_image"),
-  robots: text("robots"), // index,follow or noindex,nofollow
-  priority: real("priority").default(0.5), // Sitemap priority
-  structuredData: jsonb("structured_data"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
-}, (table) => ({
-  slugIdx: uniqueIndex("pages_slug_idx").on(table.slug),
-  statusIdx: index("pages_status_idx").on(table.status),
-}));
-
-export const insertPageSchema = createInsertSchema(pages).omit({ 
+// Post schemas (separate from blogs)
+export const insertPostSchema = createInsertSchema(posts).omit({
   id: true,
   createdAt: true,
   updatedAt: true
@@ -355,67 +449,104 @@ export const insertPageSchema = createInsertSchema(pages).omit({
   title: z.string().min(1, "Title is required"),
   slug: z.string().min(1).regex(/^[a-z0-9-]+$/),
   content: z.string().min(1, "Content is required"),
-  status: z.enum(["draft", "published", "archived"]).optional(),
+  authorId: z.number().positive(),
+  image: z.string().url().optional(),
+  category: z.string().optional(),
+  featuredImage: z.string().url().optional(),
+  metaTitle: z.string().max(255).optional(),
+  metaDescription: z.string().optional(),
+  metaKeywords: z.string().optional(),
+  status: z.enum(['draft', 'published']).optional()
+});
+
+export type InsertPost = z.infer<typeof insertPostSchema>;
+export type Post = typeof posts.$inferSelect;
+
+// Page schemas
+export const insertPageSchema = createInsertSchema(pages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+}).extend({
+  title: z.string().min(1, "Title is required"),
+  slug: z.string().min(1).regex(/^[a-z0-9-]+$/),
+  content: z.string().min(1, "Content is required"),
+  template: z.string().optional(),
+  parentId: z.number().positive().optional(),
+  order: z.number().optional(),
+  status: z.string().optional()
 });
 
 export type InsertPage = z.infer<typeof insertPageSchema>;
 export type Page = typeof pages.$inferSelect;
 
-// Reviews/Ratings table
-export const reviews = pgTable("reviews", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  downloadId: varchar("download_id").references(() => downloads.id),
-  userId: varchar("user_id").references(() => users.id),
-  rating: integer("rating").notNull(), // 1-5
-  comment: text("comment"),
-  helpful: integer("helpful").default(0),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
-}, (table) => ({
-  downloadIdx: index("reviews_download_idx").on(table.downloadId),
-  userIdx: index("reviews_user_idx").on(table.userId),
-  ratingIdx: index("reviews_rating_idx").on(table.rating),
-}));
+// ============================================
+// ADDITIONAL TYPES AND ENUMS
+// ============================================
 
-export const insertReviewSchema = createInsertSchema(reviews).omit({ 
-  id: true,
-  helpful: true,
-  createdAt: true,
-  updatedAt: true
-}).extend({
-  rating: z.number().min(1).max(5),
-  comment: z.string().optional(),
-});
+// Status enums as TypeScript types for use in application logic
+export type BlogStatus = 'draft' | 'published' | 'archived';
+export type UserRole = 'viewer' | 'user' | 'editor' | 'moderator' | 'admin' | 'super_admin';
+export type AdminRole = 'admin' | 'editor';
+export type SignalPlatform = 'MT4' | 'MT5' | 'Both';
+export type SignalStrategy = 'scalping' | 'trend_following' | 'hedging' | 'grid' | 'martingale' | 'breakout' | 'range_trading' | 'news_trading';
+export type CommentStatus = 'pending' | 'approved' | 'spam' | 'deleted';
+export type CategoryStatus = 'active' | 'inactive';
+export type SubscriptionStatus = 'free' | 'basic' | 'premium' | 'enterprise';
 
-export type InsertReview = z.infer<typeof insertReviewSchema>;
-export type Review = typeof reviews.$inferSelect;
+// Pagination types
+export interface PaginationOptions {
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
 
-// FAQ table
-export const faqs = pgTable("faqs", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  question: text("question").notNull(),
-  answer: text("answer").notNull(),
-  category: text("category"),
-  order: integer("order").default(0),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
-}, (table) => ({
-  categoryIdx: index("faqs_category_idx").on(table.category),
-  orderIdx: index("faqs_order_idx").on(table.order),
-  activeIdx: index("faqs_active_idx").on(table.isActive),
-}));
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
 
-export const insertFaqSchema = createInsertSchema(faqs).omit({ 
-  id: true,
-  createdAt: true,
-  updatedAt: true
-}).extend({
-  question: z.string().min(1, "Question is required"),
-  answer: z.string().min(1, "Answer is required"),
-  order: z.number().optional(),
-  isActive: z.boolean().optional(),
-});
+// Filter types for complex queries
+export interface BlogFilters {
+  status?: BlogStatus;
+  categoryId?: number;
+  authorId?: number;
+  tags?: string[];
+  startDate?: Date;
+  endDate?: Date;
+}
 
-export type InsertFaq = z.infer<typeof insertFaqSchema>;
-export type Faq = typeof faqs.$inferSelect;
+export interface SignalFilters {
+  platform?: SignalPlatform;
+  strategy?: SignalStrategy;
+  isPremium?: boolean;
+  minRating?: number;
+  categoryId?: number;
+}
+
+export interface UserFilters {
+  role?: UserRole;
+  subscriptionStatus?: SubscriptionStatus;
+  country?: string;
+  emailVerified?: boolean;
+}
+
+// Response types
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+// SEO structured data types
+export interface StructuredData {
+  '@context': string;
+  '@type': string;
+  [key: string]: any;
+}

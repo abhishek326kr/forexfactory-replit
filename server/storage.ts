@@ -1,130 +1,188 @@
 import {
   type User, type InsertUser,
-  type Post, type InsertPost,
-  type Download, type InsertDownload,
+  type Admin, type InsertAdmin,
+  type Blog, type InsertBlog,
   type Category, type InsertCategory,
-  type Tag, type InsertTag,
   type Comment, type InsertComment,
-  type Analytics, type InsertAnalytics,
-  type Newsletter, type InsertNewsletter,
+  type Media, type InsertMedia,
+  type SeoMeta, type InsertSeoMeta,
+  type Signal, type InsertSignal,
+  type Post, type InsertPost,
   type Page, type InsertPage,
-  type Review, type InsertReview,
-  type Faq, type InsertFaq
+  type BlogStatus,
+  type UserRole,
+  type AdminRole,
+  type SignalPlatform,
+  type SignalStrategy,
+  type CommentStatus,
+  type CategoryStatus,
+  type PaginationOptions as SchemaPaginationOptions,
+  type PaginatedResult as SchemaPaginatedResult,
+  type BlogFilters,
+  type SignalFilters,
+  type UserFilters
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
 
-// Pagination interface
-export interface PaginationOptions {
-  page?: number;
-  limit?: number;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-}
-
-export interface PaginatedResult<T> {
-  data: T[];
-  total: number;
-  page: number;
-  totalPages: number;
-}
+// Re-export pagination types from schema  
+export type PaginationOptions = SchemaPaginationOptions;
+export type PaginatedResult<T> = SchemaPaginatedResult<T>;
 
 // Main storage interface with all CRUD operations
 export interface IStorage {
-  // Users
+  // ============================================
+  // ADMIN MANAGEMENT
+  // ============================================
+  createAdmin(admin: InsertAdmin): Promise<Admin>;
+  getAdmin(id: number): Promise<Admin | undefined>;
+  getAdminByEmail(email: string): Promise<Admin | undefined>;
+  getAdminByUsername(username: string): Promise<Admin | undefined>;
+  authenticateAdmin(username: string, password: string): Promise<Admin | undefined>;
+  updateAdmin(id: number, data: Partial<InsertAdmin>): Promise<Admin | undefined>;
+  deleteAdmin(id: number): Promise<boolean>;
+  getAllAdmins(options?: PaginationOptions): Promise<PaginatedResult<Admin>>;
+  getAdminsByRole(role: AdminRole, options?: PaginationOptions): Promise<PaginatedResult<Admin>>;
+
+  // ============================================
+  // USER MANAGEMENT
+  // ============================================
   createUser(user: InsertUser): Promise<User>;
-  getUser(id: string): Promise<User | undefined>;
+  getUser(id: number): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
-  authenticate(username: string, password: string): Promise<User | undefined>;
-  updateUserProfile(id: string, data: Partial<User>): Promise<User | undefined>;
-  getAllUsers(options?: PaginationOptions): Promise<PaginatedResult<User>>;
+  authenticateUser(email: string, password: string): Promise<User | undefined>;
+  updateUserProfile(id: number, data: Partial<InsertUser>): Promise<User | undefined>;
+  deleteUser(id: number): Promise<boolean>;
+  getAllUsers(options?: PaginationOptions, filters?: UserFilters): Promise<PaginatedResult<User>>;
+  getUsersByRole(role: UserRole, options?: PaginationOptions): Promise<PaginatedResult<User>>;
+  updateUserSubscription(id: number, status: string, endDate?: Date): Promise<User | undefined>;
+  updateLastLogin(id: number): Promise<void>;
+  verifyUserEmail(id: number): Promise<boolean>;
 
-  // Posts
-  createPost(post: InsertPost): Promise<Post>;
-  updatePost(id: string, post: Partial<InsertPost>): Promise<Post | undefined>;
-  deletePost(id: string): Promise<boolean>;
-  findPostById(id: string): Promise<Post | undefined>;
-  findPostBySlug(slug: string): Promise<Post | undefined>;
-  findAllPosts(options?: PaginationOptions): Promise<PaginatedResult<Post>>;
-  findPublishedPosts(options?: PaginationOptions): Promise<PaginatedResult<Post>>;
-  incrementPostViews(id: string): Promise<void>;
-  getPostsByCategory(categoryId: string, options?: PaginationOptions): Promise<PaginatedResult<Post>>;
-  getPostsByAuthor(authorId: string, options?: PaginationOptions): Promise<PaginatedResult<Post>>;
+  // ============================================
+  // BLOG MANAGEMENT
+  // ============================================
+  createBlog(blog: InsertBlog): Promise<Blog>;
+  updateBlog(id: number, blog: Partial<InsertBlog>): Promise<Blog | undefined>;
+  deleteBlog(id: number): Promise<boolean>;
+  getBlogById(id: number): Promise<Blog | undefined>;
+  getBlogBySlug(slug: string): Promise<Blog | undefined>;
+  getAllBlogs(options?: PaginationOptions, filters?: BlogFilters): Promise<PaginatedResult<Blog>>;
+  getPublishedBlogs(options?: PaginationOptions): Promise<PaginatedResult<Blog>>;
+  getBlogsByStatus(status: BlogStatus, options?: PaginationOptions): Promise<PaginatedResult<Blog>>;
+  getBlogsByCategory(categoryId: number, options?: PaginationOptions): Promise<PaginatedResult<Blog>>;
+  getBlogsByAuthor(author: string, options?: PaginationOptions): Promise<PaginatedResult<Blog>>;
+  incrementBlogViews(id: number): Promise<void>;
+  searchBlogs(query: string, options?: PaginationOptions): Promise<PaginatedResult<Blog>>;
+  getRelatedBlogs(blogId: number, limit?: number): Promise<Blog[]>;
+  getFeaturedBlogs(limit?: number): Promise<Blog[]>;
 
-  // Downloads
-  createDownload(download: InsertDownload): Promise<Download>;
-  updateDownload(id: string, download: Partial<InsertDownload>): Promise<Download | undefined>;
-  deleteDownload(id: string): Promise<boolean>;
-  findDownloadById(id: string): Promise<Download | undefined>;
-  findDownloadBySlug(slug: string): Promise<Download | undefined>;
-  findAllDownloads(options?: PaginationOptions): Promise<PaginatedResult<Download>>;
-  incrementDownloadCount(id: string): Promise<void>;
-  findDownloadsByStrategy(strategy: string, options?: PaginationOptions): Promise<PaginatedResult<Download>>;
-  findDownloadsByPlatform(platform: string, options?: PaginationOptions): Promise<PaginatedResult<Download>>;
-  getFeaturedDownloads(limit?: number): Promise<Download[]>;
+  // ============================================
+  // SIGNAL/EA MANAGEMENT
+  // ============================================
+  createSignal(signal: InsertSignal): Promise<Signal>;
+  updateSignal(id: number, signal: Partial<InsertSignal>): Promise<Signal | undefined>;
+  deleteSignal(id: number): Promise<boolean>;
+  getSignalById(id: number): Promise<Signal | undefined>;
+  getSignalByUuid(uuid: string): Promise<Signal | undefined>;
+  getAllSignals(options?: PaginationOptions, filters?: SignalFilters): Promise<PaginatedResult<Signal>>;
+  getSignalsByPlatform(platform: SignalPlatform, options?: PaginationOptions): Promise<PaginatedResult<Signal>>;
+  getSignalsByStrategy(strategy: SignalStrategy, options?: PaginationOptions): Promise<PaginatedResult<Signal>>;
+  getPremiumSignals(options?: PaginationOptions): Promise<PaginatedResult<Signal>>;
+  getFreeSignals(options?: PaginationOptions): Promise<PaginatedResult<Signal>>;
+  incrementSignalDownloadCount(id: number): Promise<void>;
+  updateSignalRating(id: number, rating: number): Promise<void>;
+  getTopRatedSignals(limit?: number): Promise<Signal[]>;
+  getMostDownloadedSignals(limit?: number): Promise<Signal[]>;
+  getSignalsByCategory(categoryId: number, options?: PaginationOptions): Promise<PaginatedResult<Signal>>;
+  searchSignals(query: string, options?: PaginationOptions): Promise<PaginatedResult<Signal>>;
 
-  // Categories
+  // ============================================
+  // CATEGORY MANAGEMENT
+  // ============================================
   createCategory(category: InsertCategory): Promise<Category>;
-  updateCategory(id: string, category: Partial<InsertCategory>): Promise<Category | undefined>;
-  deleteCategory(id: string): Promise<boolean>;
-  findAllCategories(): Promise<Category[]>;
-  findCategoryBySlug(slug: string): Promise<Category | undefined>;
-  findCategoryById(id: string): Promise<Category | undefined>;
+  updateCategory(id: number, category: Partial<InsertCategory>): Promise<Category | undefined>;
+  deleteCategory(id: number): Promise<boolean>;
+  getCategoryById(id: number): Promise<Category | undefined>;
+  getCategoryBySlug(slug: string): Promise<Category | undefined>;
+  getAllCategories(): Promise<Category[]>;
+  getActiveCategories(): Promise<Category[]>;
   getCategoryTree(): Promise<Category[]>;
+  getCategoriesByParent(parentId: number | null): Promise<Category[]>;
+  updateCategoryStatus(id: number, status: CategoryStatus): Promise<boolean>;
 
-  // Tags
-  createTag(tag: InsertTag): Promise<Tag>;
-  findOrCreateTag(name: string): Promise<Tag>;
-  findPopularTags(limit?: number): Promise<Tag[]>;
-  incrementTagCount(id: string): Promise<void>;
-  findAllTags(): Promise<Tag[]>;
-  findTagBySlug(slug: string): Promise<Tag | undefined>;
-  addTagsToPost(postId: string, tagIds: string[]): Promise<void>;
-  getPostTags(postId: string): Promise<Tag[]>;
-
-  // Comments
+  // ============================================
+  // COMMENT MANAGEMENT
+  // ============================================
   createComment(comment: InsertComment): Promise<Comment>;
-  approveComment(id: string): Promise<Comment | undefined>;
-  deleteComment(id: string): Promise<boolean>;
-  findCommentsByPost(postId: string, onlyApproved?: boolean): Promise<Comment[]>;
-  findPendingComments(): Promise<Comment[]>;
-  getCommentCount(postId: string): Promise<number>;
+  updateComment(id: number, comment: Partial<InsertComment>): Promise<Comment | undefined>;
+  deleteComment(id: number): Promise<boolean>;
+  getCommentById(id: number): Promise<Comment | undefined>;
+  getCommentsByPost(postId: number, onlyApproved?: boolean): Promise<Comment[]>;
+  getCommentsByStatus(status: CommentStatus): Promise<Comment[]>;
+  getPendingComments(): Promise<Comment[]>;
+  approveComment(id: number): Promise<Comment | undefined>;
+  markCommentAsSpam(id: number): Promise<Comment | undefined>;
+  getCommentReplies(parentId: number): Promise<Comment[]>;
+  getCommentCount(postId: number): Promise<number>;
+  getRecentComments(limit?: number): Promise<Comment[]>;
 
-  // Analytics
-  trackPageView(analytics: InsertAnalytics): Promise<Analytics>;
-  trackDownload(downloadId: string, userId?: string, metadata?: any): Promise<Analytics>;
-  trackSearch(query: string, resultsCount: number, userId?: string): Promise<Analytics>;
-  getPopularContent(eventType: string, limit?: number): Promise<any[]>;
-  getAnalyticsByDateRange(startDate: Date, endDate: Date): Promise<Analytics[]>;
+  // ============================================
+  // SEO META MANAGEMENT
+  // ============================================
+  createSeoMeta(seoMeta: InsertSeoMeta): Promise<SeoMeta>;
+  updateSeoMeta(id: number, seoMeta: Partial<InsertSeoMeta>): Promise<SeoMeta | undefined>;
+  deleteSeoMeta(id: number): Promise<boolean>;
+  getSeoMetaById(id: number): Promise<SeoMeta | undefined>;
+  getSeoMetaByPostId(postId: number): Promise<SeoMeta | undefined>;
+  updateOrCreateSeoMeta(postId: number, seoMeta: InsertSeoMeta): Promise<SeoMeta>;
+  generateSitemap(): Promise<Array<{ url: string; lastmod: Date; priority: number }>>;
 
-  // Newsletter
-  subscribeNewsletter(newsletter: InsertNewsletter): Promise<Newsletter>;
-  unsubscribeNewsletter(email: string): Promise<boolean>;
-  findAllSubscribers(activeOnly?: boolean): Promise<Newsletter[]>;
-  findSubscriberByEmail(email: string): Promise<Newsletter | undefined>;
-  updateSubscriberPreferences(email: string, preferences: any): Promise<Newsletter | undefined>;
+  // ============================================
+  // MEDIA MANAGEMENT
+  // ============================================
+  createMedia(media: InsertMedia): Promise<Media>;
+  updateMedia(id: number, media: Partial<InsertMedia>): Promise<Media | undefined>;
+  deleteMedia(id: number): Promise<boolean>;
+  getMediaById(id: number): Promise<Media | undefined>;
+  getMediaByUser(userId: number, options?: PaginationOptions): Promise<PaginatedResult<Media>>;
+  getAllMedia(options?: PaginationOptions): Promise<PaginatedResult<Media>>;
+  getMediaByType(fileType: string, options?: PaginationOptions): Promise<PaginatedResult<Media>>;
+  searchMedia(query: string, options?: PaginationOptions): Promise<PaginatedResult<Media>>;
 
-  // Pages
+  // ============================================
+  // POST MANAGEMENT (separate from blogs)
+  // ============================================
+  createPost(post: InsertPost): Promise<Post>;
+  updatePost(id: number, post: Partial<InsertPost>): Promise<Post | undefined>;
+  deletePost(id: number): Promise<boolean>;
+  getPostById(id: number): Promise<Post | undefined>;
+  getPostBySlug(slug: string): Promise<Post | undefined>;
+  getAllPosts(options?: PaginationOptions): Promise<PaginatedResult<Post>>;
+  getPublishedPosts(options?: PaginationOptions): Promise<PaginatedResult<Post>>;
+  getPostsByAuthor(authorId: number, options?: PaginationOptions): Promise<PaginatedResult<Post>>;
+  getPostsByCategory(category: string, options?: PaginationOptions): Promise<PaginatedResult<Post>>;
+
+  // ============================================
+  // PAGE MANAGEMENT
+  // ============================================
   createPage(page: InsertPage): Promise<Page>;
-  updatePage(id: string, page: Partial<InsertPage>): Promise<Page | undefined>;
-  deletePage(id: string): Promise<boolean>;
-  findPageBySlug(slug: string): Promise<Page | undefined>;
-  findAllPages(): Promise<Page[]>;
+  updatePage(id: number, page: Partial<InsertPage>): Promise<Page | undefined>;
+  deletePage(id: number): Promise<boolean>;
+  getPageById(id: number): Promise<Page | undefined>;
+  getPageBySlug(slug: string): Promise<Page | undefined>;
+  getAllPages(): Promise<Page[]>;
+  getPagesByTemplate(template: string): Promise<Page[]>;
+  getPageTree(): Promise<Page[]>;
 
-  // Reviews
-  createReview(review: InsertReview): Promise<Review>;
-  getReviewsByDownload(downloadId: string): Promise<Review[]>;
-  updateDownloadRating(downloadId: string): Promise<void>;
-
-  // FAQs
-  createFaq(faq: InsertFaq): Promise<Faq>;
-  updateFaq(id: string, faq: Partial<InsertFaq>): Promise<Faq | undefined>;
-  deleteFaq(id: string): Promise<boolean>;
-  getActiveFaqs(): Promise<Faq[]>;
-
-  // Initialization
+  // ============================================
+  // UTILITY METHODS
+  // ============================================
   initialize(): Promise<void>;
+  generateUuid(): string;
+  hashPassword(password: string): Promise<string>;
+  comparePassword(password: string, hash: string): Promise<boolean>;
 }
 
 // Helper functions for password hashing using bcrypt
@@ -140,43 +198,137 @@ const comparePassword = async (password: string, hash: string): Promise<boolean>
 
 // In-memory storage implementation
 export class MemStorage implements IStorage {
-  private users: Map<string, User> = new Map();
-  private posts: Map<string, Post> = new Map();
-  private downloads: Map<string, Download> = new Map();
-  private categories: Map<string, Category> = new Map();
-  private tags: Map<string, Tag> = new Map();
-  private comments: Map<string, Comment> = new Map();
-  private analytics: Map<string, Analytics> = new Map();
-  private newsletter: Map<string, Newsletter> = new Map();
-  private pages: Map<string, Page> = new Map();
-  private reviews: Map<string, Review> = new Map();
-  private faqs: Map<string, Faq> = new Map();
-  private postTags: Map<string, Set<string>> = new Map(); // postId -> tagIds
+  private admins: Map<number, Admin> = new Map();
+  private users: Map<number, User> = new Map();
+  private blogs: Map<number, Blog> = new Map();
+  private signals: Map<number, Signal> = new Map();
+  private categories: Map<number, Category> = new Map();
+  private comments: Map<number, Comment> = new Map();
+  private seoMeta: Map<number, SeoMeta> = new Map();
+  private media: Map<number, Media> = new Map();
+  private posts: Map<number, Post> = new Map();
+  private pages: Map<number, Page> = new Map();
+  private blogCategories: Map<string, { blogId: number; categoryId: number }> = new Map();
+  
+  private nextAdminId = 1;
+  private nextUserId = 1;
+  private nextBlogId = 1;
+  private nextSignalId = 1;
+  private nextCategoryId = 1;
+  private nextCommentId = 1;
+  private nextSeoMetaId = 1;
+  private nextMediaId = 1;
+  private nextPostId = 1;
+  private nextPageId = 1;
 
   constructor() {
     // Initialize collections
   }
 
-  // User methods
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const hashedPassword = await hashPassword(insertUser.password);
-    const user: User = { 
+  // ============================================
+  // ADMIN MANAGEMENT IMPLEMENTATION
+  // ============================================
+  async createAdmin(insertAdmin: InsertAdmin): Promise<Admin> {
+    const id = this.nextAdminId++;
+    const hashedPassword = await hashPassword(insertAdmin.password);
+    const admin: Admin = {
       id,
-      email: insertUser.email,
-      username: insertUser.username,
+      ...insertAdmin,
       password: hashedPassword,
-      role: insertUser.role || 'user',
-      avatar: insertUser.avatar || null,
-      bio: insertUser.bio || null,
+      role: insertAdmin.role || 'editor',
       createdAt: new Date(),
       updatedAt: new Date()
+    };
+    this.admins.set(id, admin);
+    return admin;
+  }
+
+  async getAdmin(id: number): Promise<Admin | undefined> {
+    return this.admins.get(id);
+  }
+
+  async getAdminByEmail(email: string): Promise<Admin | undefined> {
+    return Array.from(this.admins.values()).find(a => a.email === email);
+  }
+
+  async getAdminByUsername(username: string): Promise<Admin | undefined> {
+    return Array.from(this.admins.values()).find(a => a.username === username);
+  }
+
+  async authenticateAdmin(username: string, password: string): Promise<Admin | undefined> {
+    const admin = await this.getAdminByUsername(username);
+    if (!admin) return undefined;
+    const valid = await comparePassword(password, admin.password);
+    return valid ? admin : undefined;
+  }
+
+  async updateAdmin(id: number, data: Partial<InsertAdmin>): Promise<Admin | undefined> {
+    const admin = this.admins.get(id);
+    if (!admin) return undefined;
+    const updated = { ...admin, ...data, updatedAt: new Date() };
+    if (data.password) {
+      updated.password = await hashPassword(data.password);
+    }
+    this.admins.set(id, updated);
+    return updated;
+  }
+
+  async deleteAdmin(id: number): Promise<boolean> {
+    return this.admins.delete(id);
+  }
+
+  async getAllAdmins(options: PaginationOptions = {}): Promise<PaginatedResult<Admin>> {
+    const { page = 1, limit = 10 } = options;
+    const admins = Array.from(this.admins.values());
+    const total = admins.length;
+    const start = (page - 1) * limit;
+    const data = admins.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  async getAdminsByRole(role: AdminRole, options: PaginationOptions = {}): Promise<PaginatedResult<Admin>> {
+    const { page = 1, limit = 10 } = options;
+    const filtered = Array.from(this.admins.values()).filter(a => a.role === role);
+    const total = filtered.length;
+    const start = (page - 1) * limit;
+    const data = filtered.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  // ============================================
+  // USER MANAGEMENT IMPLEMENTATION
+  // ============================================
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = this.nextUserId++;
+    const hashedPassword = await hashPassword(insertUser.password);
+    const user: User = {
+      id,
+      ...insertUser,
+      password: hashedPassword,
+      role: insertUser.role || 'viewer',
+      createdAt: new Date(),
+      emailVerified: false,
+      twoFactorEnabled: false
     };
     this.users.set(id, user);
     return user;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
+  async getUser(id: number): Promise<User | undefined> {
     return this.users.get(id);
   }
 
@@ -188,24 +340,43 @@ export class MemStorage implements IStorage {
     return Array.from(this.users.values()).find(u => u.username === username);
   }
 
-  async authenticate(username: string, password: string): Promise<User | undefined> {
-    const user = await this.getUserByUsername(username);
+  async authenticateUser(email: string, password: string): Promise<User | undefined> {
+    const user = await this.getUserByEmail(email);
     if (!user) return undefined;
     const valid = await comparePassword(password, user.password);
+    if (valid) {
+      await this.updateLastLogin(user.id);
+    }
     return valid ? user : undefined;
   }
 
-  async updateUserProfile(id: string, data: Partial<User>): Promise<User | undefined> {
+  async updateUserProfile(id: number, data: Partial<InsertUser>): Promise<User | undefined> {
     const user = this.users.get(id);
     if (!user) return undefined;
-    const updated = { ...user, ...data, updatedAt: new Date() };
+    const updated = { ...user, ...data };
+    if (data.password) {
+      updated.password = await hashPassword(data.password);
+    }
     this.users.set(id, updated);
     return updated;
   }
 
-  async getAllUsers(options: PaginationOptions = {}): Promise<PaginatedResult<User>> {
+  async deleteUser(id: number): Promise<boolean> {
+    return this.users.delete(id);
+  }
+
+  async getAllUsers(options: PaginationOptions = {}, filters?: UserFilters): Promise<PaginatedResult<User>> {
     const { page = 1, limit = 10 } = options;
-    const users = Array.from(this.users.values());
+    let users = Array.from(this.users.values());
+    
+    // Apply filters
+    if (filters) {
+      if (filters.role) users = users.filter(u => u.role === filters.role);
+      if (filters.subscriptionStatus) users = users.filter(u => u.subscriptionStatus === filters.subscriptionStatus);
+      if (filters.country) users = users.filter(u => u.country === filters.country);
+      if (filters.emailVerified !== undefined) users = users.filter(u => u.emailVerified === filters.emailVerified);
+    }
+    
     const total = users.length;
     const start = (page - 1) * limit;
     const data = users.slice(start, start + limit);
@@ -213,20 +384,663 @@ export class MemStorage implements IStorage {
       data,
       total,
       page,
-      totalPages: Math.ceil(total / limit)
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
     };
   }
 
-  // Post methods
+  async getUsersByRole(role: UserRole, options: PaginationOptions = {}): Promise<PaginatedResult<User>> {
+    return this.getAllUsers(options, { role });
+  }
+
+  async updateUserSubscription(id: number, status: string, endDate?: Date): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    user.subscriptionStatus = status;
+    user.subscriptionEndDate = endDate || null;
+    this.users.set(id, user);
+    return user;
+  }
+
+  async updateLastLogin(id: number): Promise<void> {
+    const user = this.users.get(id);
+    if (user) {
+      user.lastLogin = new Date();
+      this.users.set(id, user);
+    }
+  }
+
+  async verifyUserEmail(id: number): Promise<boolean> {
+    const user = this.users.get(id);
+    if (!user) return false;
+    user.emailVerified = true;
+    this.users.set(id, user);
+    return true;
+  }
+
+  // ============================================
+  // BLOG MANAGEMENT IMPLEMENTATION
+  // ============================================
+  async createBlog(insertBlog: InsertBlog): Promise<Blog> {
+    const id = this.nextBlogId++;
+    const blog: Blog = {
+      id,
+      ...insertBlog,
+      status: insertBlog.status || 'draft',
+      views: 0,
+      createdAt: new Date()
+    };
+    this.blogs.set(id, blog);
+    return blog;
+  }
+
+  async updateBlog(id: number, data: Partial<InsertBlog>): Promise<Blog | undefined> {
+    const blog = this.blogs.get(id);
+    if (!blog) return undefined;
+    const updated = { ...blog, ...data };
+    this.blogs.set(id, updated);
+    return updated;
+  }
+
+  async deleteBlog(id: number): Promise<boolean> {
+    return this.blogs.delete(id);
+  }
+
+  async getBlogById(id: number): Promise<Blog | undefined> {
+    return this.blogs.get(id);
+  }
+
+  async getBlogBySlug(slug: string): Promise<Blog | undefined> {
+    return Array.from(this.blogs.values()).find(b => b.seoSlug === slug);
+  }
+
+  async getAllBlogs(options: PaginationOptions = {}, filters?: BlogFilters): Promise<PaginatedResult<Blog>> {
+    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = options;
+    let blogs = Array.from(this.blogs.values());
+    
+    // Apply filters
+    if (filters) {
+      if (filters.status) blogs = blogs.filter(b => b.status === filters.status);
+      if (filters.categoryId) blogs = blogs.filter(b => b.categoryId === filters.categoryId);
+      if (filters.tags && filters.tags.length > 0) {
+        blogs = blogs.filter(b => {
+          const blogTags = b.tags.split(',').map(t => t.trim());
+          return filters.tags!.some(tag => blogTags.includes(tag));
+        });
+      }
+    }
+    
+    // Sort
+    blogs.sort((a, b) => {
+      const aVal = (a as any)[sortBy];
+      const bVal = (b as any)[sortBy];
+      const comparison = aVal > bVal ? 1 : -1;
+      return sortOrder === 'desc' ? -comparison : comparison;
+    });
+    
+    const total = blogs.length;
+    const start = (page - 1) * limit;
+    const data = blogs.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  async getPublishedBlogs(options: PaginationOptions = {}): Promise<PaginatedResult<Blog>> {
+    return this.getAllBlogs(options, { status: 'published' });
+  }
+
+  async getBlogsByStatus(status: BlogStatus, options: PaginationOptions = {}): Promise<PaginatedResult<Blog>> {
+    return this.getAllBlogs(options, { status });
+  }
+
+  async getBlogsByCategory(categoryId: number, options: PaginationOptions = {}): Promise<PaginatedResult<Blog>> {
+    return this.getAllBlogs(options, { categoryId });
+  }
+
+  async getBlogsByAuthor(author: string, options: PaginationOptions = {}): Promise<PaginatedResult<Blog>> {
+    const { page = 1, limit = 10 } = options;
+    const filtered = Array.from(this.blogs.values()).filter(b => b.author === author);
+    const total = filtered.length;
+    const start = (page - 1) * limit;
+    const data = filtered.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  async incrementBlogViews(id: number): Promise<void> {
+    const blog = this.blogs.get(id);
+    if (blog && blog.views !== null) {
+      blog.views = (blog.views || 0) + 1;
+      this.blogs.set(id, blog);
+    }
+  }
+
+  async searchBlogs(query: string, options: PaginationOptions = {}): Promise<PaginatedResult<Blog>> {
+    const { page = 1, limit = 10 } = options;
+    const lowerQuery = query.toLowerCase();
+    const filtered = Array.from(this.blogs.values()).filter(b => 
+      b.title.toLowerCase().includes(lowerQuery) ||
+      b.content.toLowerCase().includes(lowerQuery) ||
+      b.tags.toLowerCase().includes(lowerQuery)
+    );
+    const total = filtered.length;
+    const start = (page - 1) * limit;
+    const data = filtered.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  async getRelatedBlogs(blogId: number, limit: number = 5): Promise<Blog[]> {
+    const blog = this.blogs.get(blogId);
+    if (!blog) return [];
+    
+    const related = Array.from(this.blogs.values())
+      .filter(b => b.id !== blogId && b.categoryId === blog.categoryId && b.status === 'published')
+      .slice(0, limit);
+    
+    return related;
+  }
+
+  async getFeaturedBlogs(limit: number = 5): Promise<Blog[]> {
+    return Array.from(this.blogs.values())
+      .filter(b => b.status === 'published')
+      .sort((a, b) => (b.views || 0) - (a.views || 0))
+      .slice(0, limit);
+  }
+
+  // ============================================
+  // SIGNAL/EA MANAGEMENT IMPLEMENTATION
+  // ============================================
+  async createSignal(insertSignal: InsertSignal): Promise<Signal> {
+    const id = this.nextSignalId++;
+    const signal: Signal = {
+      id,
+      ...insertSignal,
+      createdAt: new Date(),
+      downloadCount: 0,
+      rating: '0.00',
+      status: 'active'
+    };
+    this.signals.set(id, signal);
+    return signal;
+  }
+
+  async updateSignal(id: number, data: Partial<InsertSignal>): Promise<Signal | undefined> {
+    const signal = this.signals.get(id);
+    if (!signal) return undefined;
+    const updated = { ...signal, ...data };
+    this.signals.set(id, updated);
+    return updated;
+  }
+
+  async deleteSignal(id: number): Promise<boolean> {
+    return this.signals.delete(id);
+  }
+
+  async getSignalById(id: number): Promise<Signal | undefined> {
+    return this.signals.get(id);
+  }
+
+  async getSignalByUuid(uuid: string): Promise<Signal | undefined> {
+    return Array.from(this.signals.values()).find(s => s.uuid === uuid);
+  }
+
+  async getAllSignals(options: PaginationOptions = {}, filters?: SignalFilters): Promise<PaginatedResult<Signal>> {
+    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = options;
+    let signals = Array.from(this.signals.values());
+    
+    // Apply filters
+    if (filters) {
+      if (filters.platform) signals = signals.filter(s => s.platform === filters.platform);
+      if (filters.strategy) signals = signals.filter(s => s.strategy === filters.strategy);
+      if (filters.isPremium !== undefined) signals = signals.filter(s => s.isPremium === filters.isPremium);
+      if (filters.minRating !== undefined) {
+        signals = signals.filter(s => parseFloat(s.rating || '0') >= filters.minRating!);
+      }
+      if (filters.categoryId) signals = signals.filter(s => s.categoryId === filters.categoryId);
+    }
+    
+    // Sort
+    signals.sort((a, b) => {
+      const aVal = (a as any)[sortBy];
+      const bVal = (b as any)[sortBy];
+      const comparison = aVal > bVal ? 1 : -1;
+      return sortOrder === 'desc' ? -comparison : comparison;
+    });
+    
+    const total = signals.length;
+    const start = (page - 1) * limit;
+    const data = signals.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  async getSignalsByPlatform(platform: SignalPlatform, options: PaginationOptions = {}): Promise<PaginatedResult<Signal>> {
+    return this.getAllSignals(options, { platform });
+  }
+
+  async getSignalsByStrategy(strategy: SignalStrategy, options: PaginationOptions = {}): Promise<PaginatedResult<Signal>> {
+    return this.getAllSignals(options, { strategy });
+  }
+
+  async getPremiumSignals(options: PaginationOptions = {}): Promise<PaginatedResult<Signal>> {
+    return this.getAllSignals(options, { isPremium: true });
+  }
+
+  async getFreeSignals(options: PaginationOptions = {}): Promise<PaginatedResult<Signal>> {
+    return this.getAllSignals(options, { isPremium: false });
+  }
+
+  async incrementSignalDownloadCount(id: number): Promise<void> {
+    const signal = this.signals.get(id);
+    if (signal) {
+      signal.downloadCount = (signal.downloadCount || 0) + 1;
+      this.signals.set(id, signal);
+    }
+  }
+
+  async updateSignalRating(id: number, rating: number): Promise<void> {
+    const signal = this.signals.get(id);
+    if (signal) {
+      signal.rating = rating.toFixed(2);
+      this.signals.set(id, signal);
+    }
+  }
+
+  async getTopRatedSignals(limit: number = 10): Promise<Signal[]> {
+    return Array.from(this.signals.values())
+      .sort((a, b) => parseFloat(b.rating || '0') - parseFloat(a.rating || '0'))
+      .slice(0, limit);
+  }
+
+  async getMostDownloadedSignals(limit: number = 10): Promise<Signal[]> {
+    return Array.from(this.signals.values())
+      .sort((a, b) => (b.downloadCount || 0) - (a.downloadCount || 0))
+      .slice(0, limit);
+  }
+
+  async getSignalsByCategory(categoryId: number, options: PaginationOptions = {}): Promise<PaginatedResult<Signal>> {
+    return this.getAllSignals(options, { categoryId });
+  }
+
+  async searchSignals(query: string, options: PaginationOptions = {}): Promise<PaginatedResult<Signal>> {
+    const { page = 1, limit = 10 } = options;
+    const lowerQuery = query.toLowerCase();
+    const filtered = Array.from(this.signals.values()).filter(s => 
+      s.title.toLowerCase().includes(lowerQuery) ||
+      s.description.toLowerCase().includes(lowerQuery)
+    );
+    const total = filtered.length;
+    const start = (page - 1) * limit;
+    const data = filtered.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  // ============================================
+  // CATEGORY MANAGEMENT IMPLEMENTATION
+  // ============================================
+  async createCategory(insertCategory: InsertCategory): Promise<Category> {
+    const categoryId = this.nextCategoryId++;
+    const category: Category = {
+      categoryId,
+      ...insertCategory,
+      status: insertCategory.status || 'active'
+    };
+    this.categories.set(categoryId, category);
+    return category;
+  }
+
+  async updateCategory(id: number, data: Partial<InsertCategory>): Promise<Category | undefined> {
+    const category = this.categories.get(id);
+    if (!category) return undefined;
+    const updated = { ...category, ...data };
+    this.categories.set(id, updated);
+    return updated;
+  }
+
+  async deleteCategory(id: number): Promise<boolean> {
+    return this.categories.delete(id);
+  }
+
+  async getCategoryById(id: number): Promise<Category | undefined> {
+    return this.categories.get(id);
+  }
+
+  async getCategoryBySlug(slug: string): Promise<Category | undefined> {
+    return Array.from(this.categories.values()).find(c => c.slug === slug);
+  }
+
+  async getAllCategories(): Promise<Category[]> {
+    return Array.from(this.categories.values());
+  }
+
+  async getActiveCategories(): Promise<Category[]> {
+    return Array.from(this.categories.values()).filter(c => c.status === 'active');
+  }
+
+  async getCategoryTree(): Promise<Category[]> {
+    const categories = Array.from(this.categories.values());
+    const tree: Category[] = [];
+    const map = new Map<number, Category>();
+    
+    categories.forEach(cat => {
+      map.set(cat.categoryId, { ...cat });
+    });
+    
+    categories.forEach(cat => {
+      if (!cat.parentId) {
+        tree.push(map.get(cat.categoryId)!);
+      }
+    });
+    
+    return tree;
+  }
+
+  async getCategoriesByParent(parentId: number | null): Promise<Category[]> {
+    return Array.from(this.categories.values()).filter(c => c.parentId === parentId);
+  }
+
+  async updateCategoryStatus(id: number, status: CategoryStatus): Promise<boolean> {
+    const category = this.categories.get(id);
+    if (!category) return false;
+    category.status = status;
+    this.categories.set(id, category);
+    return true;
+  }
+
+  // ============================================
+  // COMMENT MANAGEMENT IMPLEMENTATION
+  // ============================================
+  async createComment(insertComment: InsertComment): Promise<Comment> {
+    const id = this.nextCommentId++;
+    const comment: Comment = {
+      id,
+      ...insertComment,
+      status: insertComment.status || 'pending',
+      approved: false,
+      createdAt: new Date()
+    };
+    this.comments.set(id, comment);
+    return comment;
+  }
+
+  async updateComment(id: number, data: Partial<InsertComment>): Promise<Comment | undefined> {
+    const comment = this.comments.get(id);
+    if (!comment) return undefined;
+    const updated = { ...comment, ...data };
+    this.comments.set(id, updated);
+    return updated;
+  }
+
+  async deleteComment(id: number): Promise<boolean> {
+    return this.comments.delete(id);
+  }
+
+  async getCommentById(id: number): Promise<Comment | undefined> {
+    return this.comments.get(id);
+  }
+
+  async getCommentsByPost(postId: number, onlyApproved: boolean = true): Promise<Comment[]> {
+    return Array.from(this.comments.values()).filter(c => 
+      c.postId === postId && (!onlyApproved || c.approved === true)
+    );
+  }
+
+  async getCommentsByStatus(status: CommentStatus): Promise<Comment[]> {
+    return Array.from(this.comments.values()).filter(c => c.status === status);
+  }
+
+  async getPendingComments(): Promise<Comment[]> {
+    return this.getCommentsByStatus('pending');
+  }
+
+  async approveComment(id: number): Promise<Comment | undefined> {
+    const comment = this.comments.get(id);
+    if (!comment) return undefined;
+    comment.approved = true;
+    comment.status = 'approved';
+    this.comments.set(id, comment);
+    return comment;
+  }
+
+  async markCommentAsSpam(id: number): Promise<Comment | undefined> {
+    const comment = this.comments.get(id);
+    if (!comment) return undefined;
+    comment.status = 'spam';
+    comment.approved = false;
+    this.comments.set(id, comment);
+    return comment;
+  }
+
+  async getCommentReplies(parentId: number): Promise<Comment[]> {
+    return Array.from(this.comments.values()).filter(c => c.parentId === parentId);
+  }
+
+  async getCommentCount(postId: number): Promise<number> {
+    return Array.from(this.comments.values()).filter(c => 
+      c.postId === postId && c.approved === true
+    ).length;
+  }
+
+  async getRecentComments(limit: number = 10): Promise<Comment[]> {
+    return Array.from(this.comments.values())
+      .filter(c => c.approved === true)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+  }
+
+  // ============================================
+  // SEO META MANAGEMENT IMPLEMENTATION
+  // ============================================
+  async createSeoMeta(insertSeoMeta: InsertSeoMeta): Promise<SeoMeta> {
+    const id = this.nextSeoMetaId++;
+    const seoMeta: SeoMeta = {
+      id,
+      ...insertSeoMeta,
+      metaRobots: insertSeoMeta.metaRobots || 'index, follow',
+      schemaType: 'Article',
+      twitterCard: 'summary_large_image',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.seoMeta.set(id, seoMeta);
+    return seoMeta;
+  }
+
+  async updateSeoMeta(id: number, data: Partial<InsertSeoMeta>): Promise<SeoMeta | undefined> {
+    const seoMeta = this.seoMeta.get(id);
+    if (!seoMeta) return undefined;
+    const updated = { ...seoMeta, ...data, updatedAt: new Date() };
+    this.seoMeta.set(id, updated);
+    return updated;
+  }
+
+  async deleteSeoMeta(id: number): Promise<boolean> {
+    return this.seoMeta.delete(id);
+  }
+
+  async getSeoMetaById(id: number): Promise<SeoMeta | undefined> {
+    return this.seoMeta.get(id);
+  }
+
+  async getSeoMetaByPostId(postId: number): Promise<SeoMeta | undefined> {
+    return Array.from(this.seoMeta.values()).find(s => s.postId === postId);
+  }
+
+  async updateOrCreateSeoMeta(postId: number, data: InsertSeoMeta): Promise<SeoMeta> {
+    const existing = await this.getSeoMetaByPostId(postId);
+    if (existing) {
+      return (await this.updateSeoMeta(existing.id, data))!;
+    } else {
+      return await this.createSeoMeta({ ...data, postId });
+    }
+  }
+
+  async generateSitemap(): Promise<Array<{ url: string; lastmod: Date; priority: number }>> {
+    const urls: Array<{ url: string; lastmod: Date; priority: number }> = [];
+    
+    // Add blogs
+    const blogs = Array.from(this.blogs.values()).filter(b => b.status === 'published');
+    blogs.forEach(blog => {
+      urls.push({
+        url: `/blog/${blog.seoSlug}`,
+        lastmod: blog.createdAt,
+        priority: 0.8
+      });
+    });
+    
+    // Add pages
+    const pages = Array.from(this.pages.values());
+    pages.forEach(page => {
+      urls.push({
+        url: `/${page.slug}`,
+        lastmod: page.updatedAt || page.createdAt,
+        priority: 0.6
+      });
+    });
+    
+    return urls;
+  }
+
+  // ============================================
+  // MEDIA MANAGEMENT IMPLEMENTATION
+  // ============================================
+  async createMedia(insertMedia: InsertMedia): Promise<Media> {
+    const id = this.nextMediaId++;
+    const media: Media = {
+      id,
+      ...insertMedia,
+      uploadedAt: new Date()
+    };
+    this.media.set(id, media);
+    return media;
+  }
+
+  async updateMedia(id: number, data: Partial<InsertMedia>): Promise<Media | undefined> {
+    const media = this.media.get(id);
+    if (!media) return undefined;
+    const updated = { ...media, ...data };
+    this.media.set(id, updated);
+    return updated;
+  }
+
+  async deleteMedia(id: number): Promise<boolean> {
+    return this.media.delete(id);
+  }
+
+  async getMediaById(id: number): Promise<Media | undefined> {
+    return this.media.get(id);
+  }
+
+  async getMediaByUser(userId: number, options: PaginationOptions = {}): Promise<PaginatedResult<Media>> {
+    const { page = 1, limit = 10 } = options;
+    const filtered = Array.from(this.media.values()).filter(m => m.uploadedBy === userId);
+    const total = filtered.length;
+    const start = (page - 1) * limit;
+    const data = filtered.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  async getAllMedia(options: PaginationOptions = {}): Promise<PaginatedResult<Media>> {
+    const { page = 1, limit = 10 } = options;
+    const media = Array.from(this.media.values());
+    const total = media.length;
+    const start = (page - 1) * limit;
+    const data = media.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  async getMediaByType(fileType: string, options: PaginationOptions = {}): Promise<PaginatedResult<Media>> {
+    const { page = 1, limit = 10 } = options;
+    const filtered = Array.from(this.media.values()).filter(m => m.fileType === fileType);
+    const total = filtered.length;
+    const start = (page - 1) * limit;
+    const data = filtered.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  async searchMedia(query: string, options: PaginationOptions = {}): Promise<PaginatedResult<Media>> {
+    const { page = 1, limit = 10 } = options;
+    const lowerQuery = query.toLowerCase();
+    const filtered = Array.from(this.media.values()).filter(m => 
+      m.fileName.toLowerCase().includes(lowerQuery) ||
+      (m.altText && m.altText.toLowerCase().includes(lowerQuery))
+    );
+    const total = filtered.length;
+    const start = (page - 1) * limit;
+    const data = filtered.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  // ============================================
+  // POST MANAGEMENT IMPLEMENTATION
+  // ============================================
   async createPost(insertPost: InsertPost): Promise<Post> {
-    const id = randomUUID();
+    const id = this.nextPostId++;
     const post: Post = {
       id,
       ...insertPost,
-      views: 0,
-      published: insertPost.published || false,
       status: insertPost.status || 'draft',
-      schemaType: insertPost.schemaType || 'Article',
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -234,7 +1048,7 @@ export class MemStorage implements IStorage {
     return post;
   }
 
-  async updatePost(id: string, data: Partial<InsertPost>): Promise<Post | undefined> {
+  async updatePost(id: number, data: Partial<InsertPost>): Promise<Post | undefined> {
     const post = this.posts.get(id);
     if (!post) return undefined;
     const updated = { ...post, ...data, updatedAt: new Date() };
@@ -242,499 +1056,93 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
-  async deletePost(id: string): Promise<boolean> {
+  async deletePost(id: number): Promise<boolean> {
     return this.posts.delete(id);
   }
 
-  async findPostById(id: string): Promise<Post | undefined> {
+  async getPostById(id: number): Promise<Post | undefined> {
     return this.posts.get(id);
   }
 
-  async findPostBySlug(slug: string): Promise<Post | undefined> {
+  async getPostBySlug(slug: string): Promise<Post | undefined> {
     return Array.from(this.posts.values()).find(p => p.slug === slug);
   }
 
-  async findAllPosts(options: PaginationOptions = {}): Promise<PaginatedResult<Post>> {
-    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-    let posts = Array.from(this.posts.values());
-    
-    // Sort posts
-    posts.sort((a, b) => {
-      const aVal = a[sortBy as keyof Post];
-      const bVal = b[sortBy as keyof Post];
-      const order = sortOrder === 'asc' ? 1 : -1;
-      return (aVal! > bVal! ? 1 : -1) * order;
-    });
-
+  async getAllPosts(options: PaginationOptions = {}): Promise<PaginatedResult<Post>> {
+    const { page = 1, limit = 10 } = options;
+    const posts = Array.from(this.posts.values());
     const total = posts.length;
     const start = (page - 1) * limit;
     const data = posts.slice(start, start + limit);
-    
     return {
       data,
       total,
       page,
-      totalPages: Math.ceil(total / limit)
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
     };
   }
 
-  async findPublishedPosts(options: PaginationOptions = {}): Promise<PaginatedResult<Post>> {
-    const { page = 1, limit = 10, sortBy = 'publishedAt', sortOrder = 'desc' } = options;
-    let posts = Array.from(this.posts.values()).filter(p => p.published && p.status === 'published');
-    
-    // Sort posts
-    posts.sort((a, b) => {
-      const aVal = a[sortBy as keyof Post];
-      const bVal = b[sortBy as keyof Post];
-      const order = sortOrder === 'asc' ? 1 : -1;
-      return (aVal! > bVal! ? 1 : -1) * order;
-    });
-
-    const total = posts.length;
-    const start = (page - 1) * limit;
-    const data = posts.slice(start, start + limit);
-    
-    return {
-      data,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit)
-    };
-  }
-
-  async incrementPostViews(id: string): Promise<void> {
-    const post = this.posts.get(id);
-    if (post) {
-      post.views = (post.views || 0) + 1;
-      this.posts.set(id, post);
-    }
-  }
-
-  async getPostsByCategory(categoryId: string, options: PaginationOptions = {}): Promise<PaginatedResult<Post>> {
+  async getPublishedPosts(options: PaginationOptions = {}): Promise<PaginatedResult<Post>> {
     const { page = 1, limit = 10 } = options;
-    const posts = Array.from(this.posts.values()).filter(p => p.categoryId === categoryId);
-    const total = posts.length;
+    const filtered = Array.from(this.posts.values()).filter(p => p.status === 'published');
+    const total = filtered.length;
     const start = (page - 1) * limit;
-    const data = posts.slice(start, start + limit);
-    
+    const data = filtered.slice(start, start + limit);
     return {
       data,
       total,
       page,
-      totalPages: Math.ceil(total / limit)
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
     };
   }
 
-  async getPostsByAuthor(authorId: string, options: PaginationOptions = {}): Promise<PaginatedResult<Post>> {
+  async getPostsByAuthor(authorId: number, options: PaginationOptions = {}): Promise<PaginatedResult<Post>> {
     const { page = 1, limit = 10 } = options;
-    const posts = Array.from(this.posts.values()).filter(p => p.authorId === authorId);
-    const total = posts.length;
+    const filtered = Array.from(this.posts.values()).filter(p => p.authorId === authorId);
+    const total = filtered.length;
     const start = (page - 1) * limit;
-    const data = posts.slice(start, start + limit);
-    
+    const data = filtered.slice(start, start + limit);
     return {
       data,
       total,
       page,
-      totalPages: Math.ceil(total / limit)
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
     };
   }
 
-  // Download methods
-  async createDownload(insertDownload: InsertDownload): Promise<Download> {
-    const id = randomUUID();
-    const download: Download = {
-      id,
-      ...insertDownload,
-      downloadCount: 0,
-      rating: 0,
-      isPremium: insertDownload.isPremium || false,
-      status: insertDownload.status || 'active',
-      publishedAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    this.downloads.set(id, download);
-    return download;
-  }
-
-  async updateDownload(id: string, data: Partial<InsertDownload>): Promise<Download | undefined> {
-    const download = this.downloads.get(id);
-    if (!download) return undefined;
-    const updated = { ...download, ...data, updatedAt: new Date() };
-    this.downloads.set(id, updated);
-    return updated;
-  }
-
-  async deleteDownload(id: string): Promise<boolean> {
-    return this.downloads.delete(id);
-  }
-
-  async findDownloadById(id: string): Promise<Download | undefined> {
-    return this.downloads.get(id);
-  }
-
-  async findDownloadBySlug(slug: string): Promise<Download | undefined> {
-    return Array.from(this.downloads.values()).find(d => d.slug === slug);
-  }
-
-  async findAllDownloads(options: PaginationOptions = {}): Promise<PaginatedResult<Download>> {
-    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-    let downloads = Array.from(this.downloads.values());
-    
-    // Sort downloads
-    downloads.sort((a, b) => {
-      const aVal = a[sortBy as keyof Download];
-      const bVal = b[sortBy as keyof Download];
-      const order = sortOrder === 'asc' ? 1 : -1;
-      return (aVal! > bVal! ? 1 : -1) * order;
-    });
-
-    const total = downloads.length;
-    const start = (page - 1) * limit;
-    const data = downloads.slice(start, start + limit);
-    
-    return {
-      data,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit)
-    };
-  }
-
-  async incrementDownloadCount(id: string): Promise<void> {
-    const download = this.downloads.get(id);
-    if (download) {
-      download.downloadCount = (download.downloadCount || 0) + 1;
-      this.downloads.set(id, download);
-    }
-  }
-
-  async findDownloadsByStrategy(strategy: string, options: PaginationOptions = {}): Promise<PaginatedResult<Download>> {
+  async getPostsByCategory(category: string, options: PaginationOptions = {}): Promise<PaginatedResult<Post>> {
     const { page = 1, limit = 10 } = options;
-    const downloads = Array.from(this.downloads.values()).filter(d => d.strategy === strategy);
-    const total = downloads.length;
+    const filtered = Array.from(this.posts.values()).filter(p => p.category === category);
+    const total = filtered.length;
     const start = (page - 1) * limit;
-    const data = downloads.slice(start, start + limit);
-    
+    const data = filtered.slice(start, start + limit);
     return {
       data,
       total,
       page,
-      totalPages: Math.ceil(total / limit)
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
     };
   }
 
-  async findDownloadsByPlatform(platform: string, options: PaginationOptions = {}): Promise<PaginatedResult<Download>> {
-    const { page = 1, limit = 10 } = options;
-    const downloads = Array.from(this.downloads.values()).filter(d => d.platform === platform);
-    const total = downloads.length;
-    const start = (page - 1) * limit;
-    const data = downloads.slice(start, start + limit);
-    
-    return {
-      data,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit)
-    };
-  }
-
-  async getFeaturedDownloads(limit: number = 6): Promise<Download[]> {
-    return Array.from(this.downloads.values())
-      .sort((a, b) => (b.downloadCount || 0) - (a.downloadCount || 0))
-      .slice(0, limit);
-  }
-
-  // Category methods
-  async createCategory(insertCategory: InsertCategory): Promise<Category> {
-    const id = randomUUID();
-    const category: Category = {
-      id,
-      ...insertCategory,
-      order: insertCategory.order || 0,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    this.categories.set(id, category);
-    return category;
-  }
-
-  async updateCategory(id: string, data: Partial<InsertCategory>): Promise<Category | undefined> {
-    const category = this.categories.get(id);
-    if (!category) return undefined;
-    const updated = { ...category, ...data, updatedAt: new Date() };
-    this.categories.set(id, updated);
-    return updated;
-  }
-
-  async deleteCategory(id: string): Promise<boolean> {
-    return this.categories.delete(id);
-  }
-
-  async findAllCategories(): Promise<Category[]> {
-    return Array.from(this.categories.values()).sort((a, b) => (a.order || 0) - (b.order || 0));
-  }
-
-  async findCategoryBySlug(slug: string): Promise<Category | undefined> {
-    return Array.from(this.categories.values()).find(c => c.slug === slug);
-  }
-
-  async findCategoryById(id: string): Promise<Category | undefined> {
-    return this.categories.get(id);
-  }
-
-  async getCategoryTree(): Promise<Category[]> {
-    const categories = Array.from(this.categories.values());
-    const rootCategories = categories.filter(c => !c.parentId);
-    
-    const buildTree = (parentId: string | null): Category[] => {
-      return categories
-        .filter(c => c.parentId === parentId)
-        .map(c => ({ ...c, children: buildTree(c.id) } as any));
-    };
-
-    return rootCategories.map(c => ({ ...c, children: buildTree(c.id) } as any));
-  }
-
-  // Tag methods
-  async createTag(insertTag: InsertTag): Promise<Tag> {
-    const id = randomUUID();
-    const slug = insertTag.slug || insertTag.name.toLowerCase().replace(/\s+/g, '-');
-    const tag: Tag = {
-      id,
-      ...insertTag,
-      slug,
-      count: 0,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    this.tags.set(id, tag);
-    return tag;
-  }
-
-  async findOrCreateTag(name: string): Promise<Tag> {
-    const existing = Array.from(this.tags.values()).find(t => t.name === name);
-    if (existing) return existing;
-    
-    const slug = name.toLowerCase().replace(/\s+/g, '-');
-    return this.createTag({ name, slug, description: null });
-  }
-
-  async findPopularTags(limit: number = 10): Promise<Tag[]> {
-    return Array.from(this.tags.values())
-      .sort((a, b) => (b.count || 0) - (a.count || 0))
-      .slice(0, limit);
-  }
-
-  async incrementTagCount(id: string): Promise<void> {
-    const tag = this.tags.get(id);
-    if (tag) {
-      tag.count = (tag.count || 0) + 1;
-      this.tags.set(id, tag);
-    }
-  }
-
-  async findAllTags(): Promise<Tag[]> {
-    return Array.from(this.tags.values());
-  }
-
-  async findTagBySlug(slug: string): Promise<Tag | undefined> {
-    return Array.from(this.tags.values()).find(t => t.slug === slug);
-  }
-
-  async addTagsToPost(postId: string, tagIds: string[]): Promise<void> {
-    this.postTags.set(postId, new Set(tagIds));
-    // Increment tag counts
-    for (const tagId of tagIds) {
-      await this.incrementTagCount(tagId);
-    }
-  }
-
-  async getPostTags(postId: string): Promise<Tag[]> {
-    const tagIds = this.postTags.get(postId);
-    if (!tagIds) return [];
-    return Array.from(tagIds).map(id => this.tags.get(id)).filter(Boolean) as Tag[];
-  }
-
-  // Comment methods
-  async createComment(insertComment: InsertComment): Promise<Comment> {
-    const id = randomUUID();
-    const comment: Comment = {
-      id,
-      ...insertComment,
-      approved: false,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    this.comments.set(id, comment);
-    return comment;
-  }
-
-  async approveComment(id: string): Promise<Comment | undefined> {
-    const comment = this.comments.get(id);
-    if (!comment) return undefined;
-    comment.approved = true;
-    comment.updatedAt = new Date();
-    this.comments.set(id, comment);
-    return comment;
-  }
-
-  async deleteComment(id: string): Promise<boolean> {
-    return this.comments.delete(id);
-  }
-
-  async findCommentsByPost(postId: string, onlyApproved: boolean = true): Promise<Comment[]> {
-    return Array.from(this.comments.values())
-      .filter(c => c.postId === postId && (!onlyApproved || c.approved))
-      .sort((a, b) => (a.createdAt! > b.createdAt! ? -1 : 1));
-  }
-
-  async findPendingComments(): Promise<Comment[]> {
-    return Array.from(this.comments.values())
-      .filter(c => !c.approved)
-      .sort((a, b) => (a.createdAt! > b.createdAt! ? -1 : 1));
-  }
-
-  async getCommentCount(postId: string): Promise<number> {
-    return Array.from(this.comments.values())
-      .filter(c => c.postId === postId && c.approved).length;
-  }
-
-  // Analytics methods
-  async trackPageView(analytics: InsertAnalytics): Promise<Analytics> {
-    const id = randomUUID();
-    const record: Analytics = {
-      id,
-      ...analytics,
-      createdAt: new Date()
-    };
-    this.analytics.set(id, record);
-    return record;
-  }
-
-  async trackDownload(downloadId: string, userId?: string, metadata?: any): Promise<Analytics> {
-    return this.trackPageView({
-      eventType: 'downloadEvent',
-      downloadId,
-      userId,
-      metadata,
-      pageUrl: null,
-      referrer: null,
-      userAgent: null,
-      ipAddress: null,
-      sessionId: null,
-      postId: null,
-      searchQuery: null,
-      searchResultsCount: null
-    });
-  }
-
-  async trackSearch(query: string, resultsCount: number, userId?: string): Promise<Analytics> {
-    return this.trackPageView({
-      eventType: 'searchQuery',
-      searchQuery: query,
-      searchResultsCount: resultsCount,
-      userId,
-      pageUrl: null,
-      referrer: null,
-      userAgent: null,
-      ipAddress: null,
-      sessionId: null,
-      downloadId: null,
-      postId: null,
-      metadata: null
-    });
-  }
-
-  async getPopularContent(eventType: string, limit: number = 10): Promise<any[]> {
-    const events = Array.from(this.analytics.values())
-      .filter(a => a.eventType === eventType);
-    
-    // Group by content ID (postId or downloadId)
-    const counts = new Map<string, number>();
-    events.forEach(e => {
-      const contentId = e.postId || e.downloadId;
-      if (contentId) {
-        counts.set(contentId, (counts.get(contentId) || 0) + 1);
-      }
-    });
-
-    // Sort by count and return top items
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, limit)
-      .map(([id, count]) => ({ id, count }));
-  }
-
-  async getAnalyticsByDateRange(startDate: Date, endDate: Date): Promise<Analytics[]> {
-    return Array.from(this.analytics.values())
-      .filter(a => a.createdAt! >= startDate && a.createdAt! <= endDate)
-      .sort((a, b) => (a.createdAt! > b.createdAt! ? -1 : 1));
-  }
-
-  // Newsletter methods
-  async subscribeNewsletter(insertNewsletter: InsertNewsletter): Promise<Newsletter> {
-    const existing = await this.findSubscriberByEmail(insertNewsletter.email);
-    if (existing && existing.isActive) {
-      throw new Error('Email already subscribed');
-    }
-    
-    const id = existing?.id || randomUUID();
-    const newsletter: Newsletter = {
-      id,
-      ...insertNewsletter,
-      isActive: true,
-      confirmationToken: randomUUID(),
-      confirmedAt: null,
-      subscribedAt: new Date(),
-      unsubscribedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    this.newsletter.set(id, newsletter);
-    return newsletter;
-  }
-
-  async unsubscribeNewsletter(email: string): Promise<boolean> {
-    const subscriber = await this.findSubscriberByEmail(email);
-    if (!subscriber) return false;
-    
-    subscriber.isActive = false;
-    subscriber.unsubscribedAt = new Date();
-    subscriber.updatedAt = new Date();
-    this.newsletter.set(subscriber.id, subscriber);
-    return true;
-  }
-
-  async findAllSubscribers(activeOnly: boolean = false): Promise<Newsletter[]> {
-    return Array.from(this.newsletter.values())
-      .filter(n => !activeOnly || n.isActive);
-  }
-
-  async findSubscriberByEmail(email: string): Promise<Newsletter | undefined> {
-    return Array.from(this.newsletter.values()).find(n => n.email === email);
-  }
-
-  async updateSubscriberPreferences(email: string, preferences: any): Promise<Newsletter | undefined> {
-    const subscriber = await this.findSubscriberByEmail(email);
-    if (!subscriber) return undefined;
-    
-    subscriber.preferences = preferences;
-    subscriber.updatedAt = new Date();
-    this.newsletter.set(subscriber.id, subscriber);
-    return subscriber;
-  }
-
-  // Page methods
+  // ============================================
+  // PAGE MANAGEMENT IMPLEMENTATION
+  // ============================================
   async createPage(insertPage: InsertPage): Promise<Page> {
-    const id = randomUUID();
+    const id = this.nextPageId++;
     const page: Page = {
       id,
       ...insertPage,
-      template: insertPage.template || 'default',
       status: insertPage.status || 'published',
-      priority: insertPage.priority || 0.5,
+      template: insertPage.template || 'default',
+      order: insertPage.order || 0,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -742,7 +1150,7 @@ export class MemStorage implements IStorage {
     return page;
   }
 
-  async updatePage(id: string, data: Partial<InsertPage>): Promise<Page | undefined> {
+  async updatePage(id: number, data: Partial<InsertPage>): Promise<Page | undefined> {
     const page = this.pages.get(id);
     if (!page) return undefined;
     const updated = { ...page, ...data, updatedAt: new Date() };
@@ -750,356 +1158,64 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
-  async deletePage(id: string): Promise<boolean> {
+  async deletePage(id: number): Promise<boolean> {
     return this.pages.delete(id);
   }
 
-  async findPageBySlug(slug: string): Promise<Page | undefined> {
+  async getPageById(id: number): Promise<Page | undefined> {
+    return this.pages.get(id);
+  }
+
+  async getPageBySlug(slug: string): Promise<Page | undefined> {
     return Array.from(this.pages.values()).find(p => p.slug === slug);
   }
 
-  async findAllPages(): Promise<Page[]> {
-    return Array.from(this.pages.values());
+  async getAllPages(): Promise<Page[]> {
+    return Array.from(this.pages.values()).sort((a, b) => (a.order || 0) - (b.order || 0));
   }
 
-  // Review methods
-  async createReview(insertReview: InsertReview): Promise<Review> {
-    const id = randomUUID();
-    const review: Review = {
-      id,
-      ...insertReview,
-      helpful: 0,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    this.reviews.set(id, review);
+  async getPagesByTemplate(template: string): Promise<Page[]> {
+    return Array.from(this.pages.values()).filter(p => p.template === template);
+  }
+
+  async getPageTree(): Promise<Page[]> {
+    const pages = Array.from(this.pages.values());
+    const tree: Page[] = [];
+    const map = new Map<number, Page>();
     
-    // Update download rating
-    if (insertReview.downloadId) {
-      await this.updateDownloadRating(insertReview.downloadId);
-    }
-    
-    return review;
-  }
-
-  async getReviewsByDownload(downloadId: string): Promise<Review[]> {
-    return Array.from(this.reviews.values())
-      .filter(r => r.downloadId === downloadId)
-      .sort((a, b) => (a.createdAt! > b.createdAt! ? -1 : 1));
-  }
-
-  async updateDownloadRating(downloadId: string): Promise<void> {
-    const reviews = await this.getReviewsByDownload(downloadId);
-    if (reviews.length === 0) return;
-    
-    const avgRating = reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length;
-    const download = this.downloads.get(downloadId);
-    if (download) {
-      download.rating = avgRating;
-      this.downloads.set(downloadId, download);
-    }
-  }
-
-  // FAQ methods
-  async createFaq(insertFaq: InsertFaq): Promise<Faq> {
-    const id = randomUUID();
-    const faq: Faq = {
-      id,
-      ...insertFaq,
-      order: insertFaq.order || 0,
-      isActive: insertFaq.isActive !== false,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    this.faqs.set(id, faq);
-    return faq;
-  }
-
-  async updateFaq(id: string, data: Partial<InsertFaq>): Promise<Faq | undefined> {
-    const faq = this.faqs.get(id);
-    if (!faq) return undefined;
-    const updated = { ...faq, ...data, updatedAt: new Date() };
-    this.faqs.set(id, updated);
-    return updated;
-  }
-
-  async deleteFaq(id: string): Promise<boolean> {
-    return this.faqs.delete(id);
-  }
-
-  async getActiveFaqs(): Promise<Faq[]> {
-    return Array.from(this.faqs.values())
-      .filter(f => f.isActive)
-      .sort((a, b) => (a.order || 0) - (b.order || 0));
-  }
-
-  // Initialize database with sample data
-  async initialize(): Promise<void> {
-    // Create default admin user
-    const adminUser = await this.createUser({
-      email: 'admin@forexfactory.cc',
-      username: 'admin',
-      password: 'admin123456',
-      role: 'admin',
-      bio: 'System Administrator'
+    pages.forEach(page => {
+      map.set(page.id, { ...page });
     });
-
-    // Create default categories
-    const categories = [
-      { name: 'Expert Advisors', slug: 'expert-advisors', description: 'Automated trading robots for MT4/MT5', order: 1 },
-      { name: 'Indicators', slug: 'indicators', description: 'Technical indicators and analysis tools', order: 2 },
-      { name: 'Trading Strategies', slug: 'trading-strategies', description: 'Proven trading strategies and systems', order: 3 },
-      { name: 'Market Analysis', slug: 'market-analysis', description: 'Forex market analysis and insights', order: 4 },
-      { name: 'Education', slug: 'education', description: 'Trading education and tutorials', order: 5 }
-    ];
-
-    for (const cat of categories) {
-      await this.createCategory({
-        ...cat,
-        metaTitle: `${cat.name} - ForexFactory.cc`,
-        metaDescription: `Browse our collection of ${cat.name.toLowerCase()}. ${cat.description}`,
-        seoKeywords: `forex, trading, ${cat.slug.replace('-', ' ')}, mt4, mt5`,
-        parentId: null,
-        canonicalUrl: null
-      });
-    }
-
-    // Create default tags
-    const tags = [
-      'scalping', 'trend-following', 'grid-trading', 'hedging', 'news-trading',
-      'mt4', 'mt5', 'free', 'premium', 'beginner-friendly',
-      'advanced', 'backtested', 'profitable', 'low-risk', 'high-frequency'
-    ];
-
-    for (const tagName of tags) {
-      await this.findOrCreateTag(tagName);
-    }
-
-    // Get category IDs for sample content
-    const eaCategory = await this.findCategoryBySlug('expert-advisors');
-    const indicatorCategory = await this.findCategoryBySlug('indicators');
-    const strategyCategory = await this.findCategoryBySlug('trading-strategies');
-
-    // Create sample downloads
-    const sampleDownloads = [
-      {
-        name: 'Trend Master EA',
-        slug: 'trend-master-ea',
-        description: 'Advanced trend-following expert advisor with dynamic stop loss and take profit management.',
-        version: '2.5.0',
-        fileUrl: '/downloads/trend-master-ea-v2.5.0.ex4',
-        fileSize: '256 KB',
-        platform: 'MT4' as const,
-        strategy: 'Trend Following',
-        compatibility: 'MT4 Build 1090+',
-        categoryId: eaCategory?.id || null,
-        features: ['Auto lot sizing', 'News filter', 'Trailing stop', 'Multi-timeframe analysis'],
-        requirements: 'Minimum balance: $500, Recommended leverage: 1:100',
-        metaTitle: 'Trend Master EA - Professional Trend Following Robot',
-        metaDescription: 'Download Trend Master EA v2.5.0 - Advanced trend-following expert advisor for MT4 with proven profitability.',
-        seoKeywords: 'trend ea, forex robot, mt4 ea, trend following, automated trading',
-        winRate: 68.5,
-        profitFactor: 1.85,
-        maxDrawdown: 12.3,
-        canonicalUrl: null,
-        ogImage: null,
-        screenshots: null,
-        structuredData: null,
-        status: 'active',
-        isPremium: false
-      },
-      {
-        name: 'Scalper Pro EA',
-        slug: 'scalper-pro-ea',
-        description: 'High-frequency scalping robot designed for low spread pairs during Asian session.',
-        version: '1.3.2',
-        fileUrl: '/downloads/scalper-pro-ea-v1.3.2.ex5',
-        fileSize: '312 KB',
-        platform: 'MT5' as const,
-        strategy: 'Scalping',
-        compatibility: 'MT5 Build 2560+',
-        categoryId: eaCategory?.id || null,
-        features: ['1-5 minute trades', 'Spread filter', 'Time filter', 'Risk management'],
-        requirements: 'ECN broker recommended, Minimum balance: $1000',
-        metaTitle: 'Scalper Pro EA - High-Frequency Trading Robot for MT5',
-        metaDescription: 'Professional scalping EA for MT5. Fast execution, low drawdown, consistent profits.',
-        seoKeywords: 'scalping ea, mt5 robot, high frequency trading, asian session ea',
-        winRate: 82.3,
-        profitFactor: 1.42,
-        maxDrawdown: 8.7,
-        canonicalUrl: null,
-        ogImage: null,
-        screenshots: null,
-        structuredData: null,
-        status: 'active',
-        isPremium: false
-      },
-      {
-        name: 'Support Resistance Indicator',
-        slug: 'support-resistance-indicator',
-        description: 'Automatically identifies and draws support and resistance levels on any timeframe.',
-        version: '3.0.1',
-        fileUrl: '/downloads/support-resistance-v3.0.1.ex4',
-        fileSize: '128 KB',
-        platform: 'Both' as const,
-        categoryId: indicatorCategory?.id || null,
-        features: ['Auto level detection', 'Multi-timeframe', 'Alert system', 'Customizable colors'],
-        metaTitle: 'Support Resistance Indicator - Auto Level Detection for MT4/MT5',
-        metaDescription: 'Professional support and resistance indicator with automatic level detection and alerts.',
-        seoKeywords: 'support resistance, forex indicator, mt4 indicator, technical analysis',
-        strategy: null,
-        compatibility: null,
-        requirements: null,
-        winRate: null,
-        profitFactor: null,
-        maxDrawdown: null,
-        canonicalUrl: null,
-        ogImage: null,
-        screenshots: null,
-        structuredData: null,
-        status: 'active',
-        isPremium: false
+    
+    pages.forEach(page => {
+      if (!page.parentId) {
+        tree.push(map.get(page.id)!);
       }
-    ];
+    });
+    
+    return tree.sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
 
-    for (const download of sampleDownloads) {
-      await this.createDownload(download);
-    }
+  // ============================================
+  // UTILITY METHODS
+  // ============================================
+  async initialize(): Promise<void> {
+    // Initialize with sample data if needed
+    console.log('Storage initialized');
+  }
 
-    // Create sample blog posts
-    const samplePosts = [
-      {
-        title: 'Complete Guide to Forex Expert Advisors in 2025',
-        slug: 'complete-guide-forex-expert-advisors-2025',
-        content: `# Complete Guide to Forex Expert Advisors in 2025
+  generateUuid(): string {
+    return randomUUID().replace(/-/g, '').substring(0, 32);
+  }
 
-Forex Expert Advisors (EAs) have revolutionized the way traders approach the forex market. In this comprehensive guide, we'll explore everything you need to know about using EAs effectively in 2025.
+  async hashPassword(password: string): Promise<string> {
+    return hashPassword(password);
+  }
 
-## What are Expert Advisors?
-
-Expert Advisors are automated trading programs that execute trades on your behalf based on pre-programmed strategies...
-
-## Benefits of Using EAs
-
-1. **24/7 Trading**: EAs can monitor markets and execute trades round the clock
-2. **Emotion-free Trading**: Removes psychological factors from trading decisions
-3. **Backtesting Capabilities**: Test strategies on historical data before risking real money
-
-## Choosing the Right EA
-
-When selecting an EA, consider:
-- Trading strategy alignment
-- Risk management features
-- Broker compatibility
-- Historical performance metrics
-
-## Best Practices for EA Trading
-
-- Always test on demo accounts first
-- Use appropriate risk management
-- Monitor performance regularly
-- Keep your EA updated`,
-        excerpt: 'Discover everything you need to know about Forex Expert Advisors in 2025, from selection to optimization.',
-        categoryId: strategyCategory?.id || null,
-        authorId: adminUser.id,
-        status: 'published',
-        published: true,
-        publishedAt: new Date(),
-        readingTime: 8,
-        metaTitle: 'Complete Guide to Forex Expert Advisors in 2025 | ForexFactory.cc',
-        metaDescription: 'Learn how to use Forex Expert Advisors effectively in 2025. Comprehensive guide covering selection, setup, optimization, and risk management.',
-        seoKeywords: 'forex expert advisors, ea trading, automated forex trading, forex robots 2025',
-        featuredImage: '/images/blog/ea-guide-2025.jpg',
-        canonicalUrl: null,
-        ogImage: null,
-        schemaType: 'Article',
-        structuredData: null,
-        views: 0
-      }
-    ];
-
-    for (const post of samplePosts) {
-      const createdPost = await this.createPost(post);
-      
-      // Add some tags to posts
-      const postTags = await Promise.all([
-        this.findOrCreateTag('mt4'),
-        this.findOrCreateTag('scalping'),
-        this.findOrCreateTag('backtested')
-      ]);
-      
-      await this.addTagsToPost(createdPost.id, postTags.map(t => t.id));
-    }
-
-    // Create sample pages
-    const samplePages = [
-      {
-        title: 'About ForexFactory.cc',
-        slug: 'about',
-        content: `# About ForexFactory.cc
-
-Welcome to ForexFactory.cc, your premier destination for professional forex trading tools and resources.
-
-## Our Mission
-
-We provide traders with high-quality Expert Advisors, indicators, and educational content to help them succeed in the forex market.
-
-## What We Offer
-
-- Thoroughly tested Expert Advisors
-- Custom indicators for MT4/MT5
-- Educational content and tutorials
-- Trading strategies and market analysis
-
-## Why Choose Us?
-
-- All EAs are backtested and forward tested
-- Regular updates and improvements
-- Dedicated customer support
-- Active trading community`,
-        metaTitle: 'About ForexFactory.cc - Professional Forex Trading Tools',
-        metaDescription: 'Learn about ForexFactory.cc, your trusted source for forex Expert Advisors, indicators, and trading education.',
-        seoKeywords: 'about forexfactory, forex tools, trading resources',
-        canonicalUrl: null,
-        ogImage: null,
-        robots: null,
-        priority: null,
-        structuredData: null,
-        template: 'default',
-        status: 'published'
-      }
-    ];
-
-    for (const page of samplePages) {
-      await this.createPage(page);
-    }
-
-    // Create sample FAQs
-    const sampleFaqs = [
-      {
-        question: 'What is an Expert Advisor (EA)?',
-        answer: 'An Expert Advisor is an automated trading program that executes trades on your behalf based on pre-programmed trading strategies. EAs can monitor markets 24/7 and execute trades without human intervention.',
-        category: 'General',
-        order: 1
-      },
-      {
-        question: 'Which platform do your EAs work on?',
-        answer: 'Our EAs are available for both MetaTrader 4 (MT4) and MetaTrader 5 (MT5) platforms. Each product page clearly indicates platform compatibility.',
-        category: 'Compatibility',
-        order: 2
-      }
-    ];
-
-    for (const faq of sampleFaqs) {
-      await this.createFaq(faq);
-    }
-
-    console.log('Database initialized with sample data');
+  async comparePassword(password: string, hash: string): Promise<boolean> {
+    return comparePassword(password, hash);
   }
 }
 
-// Create and export storage instance
+// Export a singleton instance
 export const storage = new MemStorage();
-
-// Initialize storage with sample data on startup
-storage.initialize().catch(console.error);
