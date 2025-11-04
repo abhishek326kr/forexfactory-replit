@@ -12,6 +12,7 @@ import {
   type Faq, type InsertFaq
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import bcrypt from "bcrypt";
 
 // Pagination interface
 export interface PaginationOptions {
@@ -126,13 +127,15 @@ export interface IStorage {
   initialize(): Promise<void>;
 }
 
-// Helper to hash passwords (simple implementation, use bcrypt in production)
-const hashPassword = (password: string): string => {
-  return Buffer.from(password).toString('base64');
+// Helper functions for password hashing using bcrypt
+const SALT_ROUNDS = 10;
+
+const hashPassword = async (password: string): Promise<string> => {
+  return await bcrypt.hash(password, SALT_ROUNDS);
 };
 
-const comparePassword = (password: string, hash: string): boolean => {
-  return Buffer.from(password).toString('base64') === hash;
+const comparePassword = async (password: string, hash: string): Promise<boolean> => {
+  return await bcrypt.compare(password, hash);
 };
 
 // In-memory storage implementation
@@ -157,7 +160,7 @@ export class MemStorage implements IStorage {
   // User methods
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const hashedPassword = hashPassword(insertUser.password);
+    const hashedPassword = await hashPassword(insertUser.password);
     const user: User = { 
       id,
       email: insertUser.email,
@@ -188,7 +191,7 @@ export class MemStorage implements IStorage {
   async authenticate(username: string, password: string): Promise<User | undefined> {
     const user = await this.getUserByUsername(username);
     if (!user) return undefined;
-    const valid = comparePassword(password, user.password);
+    const valid = await comparePassword(password, user.password);
     return valid ? user : undefined;
   }
 

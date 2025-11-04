@@ -5,6 +5,7 @@ import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
+import { AuthProvider, ProtectedRoute } from "@/hooks/useAuth";
 
 // Import pages
 import Home from "@/pages/Home";
@@ -16,7 +17,15 @@ import Category from "@/pages/Category";
 import Search from "@/pages/Search";
 import About from "@/pages/About";
 import Contact from "@/pages/Contact";
-import AdminDashboard from "@/pages/AdminDashboard";
+
+// Import authentication pages
+import Login from "@/pages/Login";
+
+// Import admin pages
+import AdminDashboard from "@/pages/Admin/Dashboard";
+import PostEditor from "@/pages/Admin/PostEditor";
+import DownloadManager from "@/pages/Admin/DownloadManager";
+import Analytics from "@/pages/Admin/Analytics";
 
 function Router() {
   return (
@@ -32,9 +41,45 @@ function Router() {
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />
       
-      {/* Admin routes */}
-      <Route path="/admin" component={AdminDashboard} />
-      <Route path="/admin/:section" component={AdminDashboard} />
+      {/* Authentication */}
+      <Route path="/login" component={Login} />
+      
+      {/* Admin routes - Protected */}
+      <Route path="/admin">
+        <ProtectedRoute requireAdmin={true}>
+          <AdminDashboard />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/posts">
+        <ProtectedRoute requireAdmin={true}>
+          <AdminDashboard />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/editor">
+        <ProtectedRoute requireAdmin={true}>
+          <PostEditor />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/editor/:id">
+        <ProtectedRoute requireAdmin={true}>
+          <PostEditor />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/downloads">
+        <ProtectedRoute requireAdmin={true}>
+          <DownloadManager />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/analytics">
+        <ProtectedRoute requireAdmin={true}>
+          <Analytics />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/:section">
+        <ProtectedRoute requireAdmin={true}>
+          <AdminDashboard />
+        </ProtectedRoute>
+      </Route>
       
       {/* Fallback to 404 */}
       <Route component={NotFound} />
@@ -47,8 +92,10 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <HelmetProvider>
         <TooltipProvider>
-          <Toaster />
-          <Router />
+          <AuthProvider>
+            <Toaster />
+            <Router />
+          </AuthProvider>
         </TooltipProvider>
       </HelmetProvider>
     </QueryClientProvider>

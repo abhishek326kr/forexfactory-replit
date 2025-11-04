@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateSitemap, generateSitemapIndex, generateNewsSitemap } from "./sitemap";
@@ -14,16 +14,55 @@ import {
   insertAnalyticsSchema,
   insertReviewSchema,
   insertPageSchema,
-  insertFaqSchema
+  insertFaqSchema,
+  type User
 } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
+import session from "express-session";
+import passport from "passport";
+import { Strategy as LocalStrategy } from "passport-local";
+import MemoryStore from "memorystore";
+import rateLimit from "express-rate-limit";
+import crypto from "crypto";
 
-// Helper function for admin authentication check (simplified for now)
+// Extend Express types to include user in request
+declare module 'express-serve-static-core' {
+  interface Request {
+    user?: User;
+  }
+}
+
+// Configure memory store for sessions
+const MemoryStoreSession = MemoryStore(session);
+
+// Rate limiter for login attempts
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit each IP to 5 requests per windowMs
+  message: 'Too many login attempts, please try again later'
+});
+
+// Helper function for admin authentication check
 const isAdmin = (req: Request): boolean => {
-  // In production, this should check actual authentication/authorization
-  // For now, we'll check for an admin header or session
-  return req.headers['x-admin-key'] === 'admin' || req.query.admin === 'true';
+  // Check if user is authenticated and has admin role
+  return !!(req.user && req.user.role === 'admin');
+};
+
+// Middleware to require authentication
+const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  next();
+};
+
+// Middleware to require admin role
+const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
 };
 
 // Helper function to parse pagination parameters
@@ -35,12 +74,82 @@ const parsePagination = (req: Request) => {
   return { page, limit, sortBy, sortOrder };
 };
 
+// Configure passport strategies
+passport.use(new LocalStrategy(
+  {
+    usernameField: 'email',
+    passwordField: 'password'
+  },
+  async (email, password, done) => {
+    try {
+      // Try to find user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        // Also try by username
+        const userByUsername = await storage.authenticate(email, password);
+        if (!userByUsername) {
+          return done(null, false, { message: 'Invalid email or password' });
+        }
+        return done(null, userByUsername);
+      }
+      
+      // Authenticate using email
+      const authenticatedUser = await storage.authenticate(user.username, password);
+      if (!authenticatedUser) {
+        return done(null, false, { message: 'Invalid email or password' });
+      }
+      
+      return done(null, authenticatedUser);
+    } catch (error) {
+      return done(error);
+    }
+  }
+));
+
+// Serialize user for session
+passport.serializeUser((user: any, done) => {
+  done(null, user.id);
+});
+
+// Deserialize user from session
+passport.deserializeUser(async (id: string, done) => {
+  try {
+    const user = await storage.getUser(id);
+    done(null, user);
+  } catch (error) {
+    done(error);
+  }
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Session configuration
+  const sessionSecret = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+  
+  app.use(session({
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    store: new MemoryStoreSession({
+      checkPeriod: 86400000 // prune expired entries every 24h
+    }),
+    cookie: {
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: 'lax'
+    }
+  }));
+
+  // Initialize passport
+  app.use(passport.initialize());
+  app.use(passport.session());
+
   // Set CORS headers for all API routes
   app.use('/api', (req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, x-admin-key');
+    res.header('Access-Control-Allow-Credentials', 'true');
     if (req.method === 'OPTIONS') {
       return res.sendStatus(200);
     }
@@ -58,6 +167,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/rss-downloads.xml", generateDownloadsRssFeed);
   app.get("/atom.xml", generateAtomFeed);
   app.get("/feed/atom", generateAtomFeed);
+
+  // ==================== AUTHENTICATION ENDPOINTS ====================
+  
+  // POST /api/auth/login - User login
+  app.post("/api/auth/login", loginLimiter, (req: Request, res: Response, next: NextFunction) => {
+    passport.authenticate('local', (err: any, user: User | false, info: any) => {
+      if (err) {
+        return res.status(500).json({ error: 'Authentication failed', message: err.message });
+      }
+      
+      if (!user) {
+        return res.status(401).json({ error: 'Invalid credentials', message: info?.message || 'Invalid email or password' });
+      }
+      
+      req.logIn(user, (err) => {
+        if (err) {
+          return res.status(500).json({ error: 'Login failed', message: err.message });
+        }
+        
+        // Return user data without password
+        const { password, ...userWithoutPassword } = user;
+        res.json({ 
+          success: true, 
+          user: userWithoutPassword,
+          message: 'Login successful'
+        });
+      });
+    })(req, res, next);
+  });
+
+  // POST /api/auth/logout - User logout
+  app.post("/api/auth/logout", (req: Request, res: Response) => {
+    req.logout((err) => {
+      if (err) {
+        return res.status(500).json({ error: 'Logout failed', message: err.message });
+      }
+      
+      req.session.destroy((err) => {
+        if (err) {
+          return res.status(500).json({ error: 'Session destruction failed', message: err.message });
+        }
+        res.clearCookie('connect.sid');
+        res.json({ success: true, message: 'Logout successful' });
+      });
+    });
+  });
+
+  // GET /api/auth/check - Check authentication status
+  app.get("/api/auth/check", (req: Request, res: Response) => {
+    if (!req.user) {
+      return res.json({ 
+        authenticated: false, 
+        user: null 
+      });
+    }
+    
+    // Return user data without password
+    const { password, ...userWithoutPassword } = req.user;
+    res.json({ 
+      authenticated: true, 
+      user: userWithoutPassword 
+    });
+  });
+
+  // POST /api/auth/register - User registration (optional, for creating admin users)
+  app.post("/api/auth/register", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { email, username, password, role } = req.body;
+      
+      // Validate input
+      if (!email || !username || !password) {
+        return res.status(400).json({ error: 'Email, username, and password are required' });
+      }
+      
+      // Check if user already exists
+      const existingEmail = await storage.getUserByEmail(email);
+      const existingUsername = await storage.getUserByUsername(username);
+      
+      if (existingEmail) {
+        return res.status(400).json({ error: 'Email already registered' });
+      }
+      if (existingUsername) {
+        return res.status(400).json({ error: 'Username already taken' });
+      }
+      
+      // Create new user
+      const newUser = await storage.createUser({
+        email,
+        username,
+        password,
+        role: role || 'user'
+      });
+      
+      // Return user data without password
+      const { password: _, ...userWithoutPassword } = newUser;
+      res.status(201).json({ 
+        success: true, 
+        user: userWithoutPassword 
+      });
+    } catch (error) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ error: "Failed to create user" });
+    }
+  });
 
   // ==================== POSTS API ====================
   
@@ -219,11 +432,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/posts - Create new post (admin only)
-  app.post("/api/posts", async (req: Request, res: Response) => {
+  app.post("/api/posts", requireAdmin, async (req: Request, res: Response) => {
     try {
-      if (!isAdmin(req)) {
-        return res.status(403).json({ error: "Admin access required" });
-      }
       
       const validatedData = insertPostSchema.parse(req.body);
       const post = await storage.createPost(validatedData);
