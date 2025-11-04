@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { posts, downloads, categories, pages } from '../shared/schema';
+import { posts, signals, categories, pages } from '../shared/schema';
 import { db } from './db';
 import { eq } from 'drizzle-orm';
 
@@ -131,11 +131,11 @@ export async function generateSitemap(_req: Request, res: Response) {
       );
     });
     
-    // Fetch and add all active downloads (Expert Advisors)
+    // Fetch and add all active downloads (Expert Advisors/Signals)
     const downloadItems = await db
       .select()
-      .from(downloads)
-      .where(eq(downloads.status, 'active'));
+      .from(signals)
+      .where(eq(signals.status, 'active'));
     
     downloadItems.forEach(download => {
       const images: Array<{ loc: string; title?: string; caption?: string }> = [];

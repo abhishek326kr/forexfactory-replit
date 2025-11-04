@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { posts, downloads, categories, users } from '../shared/schema';
+import { posts, signals, categories, users } from '../shared/schema';
 import { db } from './db';
 import { eq, desc, and, sql } from 'drizzle-orm';
 
@@ -196,13 +196,13 @@ export async function generateDownloadsRssFeed(_req: Request, res: Response) {
     // Fetch latest downloads (limit to 30 most recent)
     const downloadItems = await db
       .select({
-        download: downloads,
+        download: signals,
         category: categories
       })
-      .from(downloads)
-      .leftJoin(categories, eq(downloads.categoryId, categories.id))
-      .where(eq(downloads.status, 'active'))
-      .orderBy(desc(downloads.publishedAt))
+      .from(signals)
+      .leftJoin(categories, eq(signals.categoryId, categories.categoryId))
+      .where(eq(signals.status, 'active'))
+      .orderBy(desc(signals.createdAt))
       .limit(30);
     
     // Add downloads as items

@@ -1,21 +1,22 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage as memStorage, type IStorage } from "./storage";
+import { prismaStorage } from "./prisma-storage";
 import { prisma, getDatabaseHealth, isDatabaseConnected } from "./db";
 import { generateSitemap, generateSitemapIndex, generateNewsSitemap } from "./sitemap";
 import { generateRobotsTxt, generateDynamicRobotsTxt } from "./robots";
 import { generateRssFeed, generateDownloadsRssFeed, generateAtomFeed } from "./feed";
 import { 
   insertPostSchema, 
-  insertDownloadSchema, 
+  insertSignalSchema, 
   insertCategorySchema, 
-  insertTagSchema,
   insertCommentSchema, 
-  insertNewsletterSchema, 
-  insertAnalyticsSchema,
-  insertReviewSchema,
   insertPageSchema,
-  insertFaqSchema,
+  insertBlogSchema,
+  insertMediaSchema,
+  insertSeoMetaSchema,
+  insertUserSchema,
+  insertAdminSchema,
   type User
 } from "@shared/schema";
 import { z } from "zod";
@@ -27,6 +28,36 @@ import MemoryStore from "memorystore";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
+
+// Dynamic storage selection based on database availability
+let storage: IStorage = memStorage;
+let storageType = 'memory';
+
+// Function to select appropriate storage based on database status
+async function selectStorage(): Promise<IStorage> {
+  try {
+    const isConnected = await isDatabaseConnected();
+    if (isConnected) {
+      // Initialize PrismaStorage if not already initialized
+      await prismaStorage.initialize();
+      storage = prismaStorage;
+      storageType = 'prisma';
+      console.log('✅ Using PrismaStorage (database connected)');
+      return prismaStorage;
+    }
+  } catch (error) {
+    console.warn('⚠️ Database not available, falling back to MemStorage:', error);
+  }
+  
+  // Fall back to memory storage
+  storage = memStorage;
+  storageType = 'memory';
+  console.log('📦 Using MemStorage (database unavailable)');
+  return memStorage;
+}
+
+// Initialize storage on startup
+selectStorage().catch(console.error);
 
 // Extend Express types to include user in request
 declare module 'express-serve-static-core' {
@@ -324,11 +355,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/health", async (req: Request, res: Response) => {
     try {
       const health = await getDatabaseHealth();
+      
+      // Check and update storage type if needed
+      await selectStorage();
+      
       const httpStatus = health.connected ? 200 : 503;
       
-      // Add server information
+      // Add server and storage information
       const serverHealth = {
         ...health,
+        storage: {
+          type: storageType,
+          description: storageType === 'prisma' ? 'Using database-backed PrismaStorage' : 'Using in-memory MemStorage',
+          canPersist: storageType === 'prisma'
+        },
         server: {
           status: 'running',
           environment: process.env.NODE_ENV || 'development',
@@ -346,6 +386,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'unhealthy',
         connected: false,
         error: error.message,
+        storage: {
+          type: storageType,
+          description: storageType === 'prisma' ? 'Using database-backed PrismaStorage' : 'Using in-memory MemStorage',
+          canPersist: storageType === 'prisma'
+        },
         server: {
           status: 'running',
           environment: process.env.NODE_ENV || 'development',
@@ -2375,10 +2420,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return data;
   }
 
-  // Health check endpoint
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
-  });
+  // Periodic storage check to switch to PrismaStorage when database becomes available
+  setInterval(async () => {
+    if (storageType === 'memory') {
+      // Only check if we're still using memory storage
+      try {
+        const isConnected = await isDatabaseConnected();
+        if (isConnected) {
+          console.log('🔄 Database now available, switching to PrismaStorage...');
+          await selectStorage();
+        }
+      } catch (error) {
+        // Silently ignore errors during periodic checks
+      }
+    }
+  }, 30000); // Check every 30 seconds
 
   const httpServer = createServer(app);
   return httpServer;
