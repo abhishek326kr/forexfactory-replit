@@ -11,12 +11,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   Form,
   FormControl,
@@ -29,27 +29,43 @@ import {
 import {
   Save,
   Send,
-  Eye,
   X,
   Plus,
   Image,
-  AlertCircle,
-  Loader2
+  Loader2,
+  Bold,
+  Italic,
+  Underline,
+  List,
+  ListOrdered,
+  Link,
+  Quote,
+  Code,
+  ChevronDown,
+  Settings2,
+  FileText,
+  User
 } from 'lucide-react';
 
 const postSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title is too long'),
-  slug: z.string().min(1, 'Slug is required').regex(/^[a-z0-9-]+$/, 'Slug must be lowercase with hyphens'),
   content: z.string().min(1, 'Content is required'),
-  excerpt: z.string().max(500, 'Excerpt is too long').optional(),
-  categoryId: z.string().optional(),
-  status: z.enum(['draft', 'published', 'archived']),
+  author: z.string().min(1, 'Author is required'),
   featuredImage: z.string().url().optional().or(z.literal('')),
-  metaTitle: z.string().max(60, 'Meta title should be under 60 characters').optional(),
-  metaDescription: z.string().max(160, 'Meta description should be under 160 characters').optional(),
+  categoryId: z.string().optional(),
+  tags: z.string().optional(),
+  downloadLink: z.string().url().optional().or(z.literal('')),
+  status: z.enum(['draft', 'published']),
+  
+  // SEO Fields
+  seoSlug: z.string().min(1, 'Slug is required').regex(/^[a-z0-9-]+$/, 'Slug must be lowercase with hyphens'),
+  seoTitle: z.string().max(60, 'SEO title should be under 60 characters').optional(),
+  seoDescription: z.string().max(160, 'SEO description should be under 160 characters').optional(),
   seoKeywords: z.string().optional(),
   canonicalUrl: z.string().url().optional().or(z.literal('')),
-  tags: z.array(z.string()).optional()
+  metaRobots: z.enum(['index_follow', 'noindex_follow', 'index_nofollow', 'noindex_nofollow']).optional(),
+  ogTitle: z.string().max(60, 'OG title should be under 60 characters').optional(),
+  ogDescription: z.string().max(160, 'OG description should be under 160 characters').optional()
 });
 
 type PostFormData = z.infer<typeof postSchema>;
@@ -59,33 +75,36 @@ export default function PostEditor() {
   const [, setLocation] = useLocation();
   const { id } = useParams();
   const isEditMode = !!id;
-  const [previewMode, setPreviewMode] = useState(false);
-  const [tagInput, setTagInput] = useState('');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [seoExpanded, setSeoExpanded] = useState(false);
+  const [selectedFormats, setSelectedFormats] = useState<string[]>([]);
 
   const form = useForm<PostFormData>({
     resolver: zodResolver(postSchema),
     defaultValues: {
       title: '',
-      slug: '',
       content: '',
-      excerpt: '',
-      categoryId: '',
-      status: 'draft',
+      author: 'Admin', // Default author, should be from session
       featuredImage: '',
-      metaTitle: '',
-      metaDescription: '',
+      categoryId: '',
+      tags: '',
+      downloadLink: '',
+      status: 'draft',
+      seoSlug: '',
+      seoTitle: '',
+      seoDescription: '',
       seoKeywords: '',
       canonicalUrl: '',
-      tags: []
+      metaRobots: 'index_follow',
+      ogTitle: '',
+      ogDescription: ''
     }
   });
 
   // Fetch post data if editing
   const { data: post, isLoading: postLoading } = useQuery({
-    queryKey: [`/api/posts/${id}`],
+    queryKey: [`/api/admin/blogs/${id}`],
     queryFn: async () => {
-      const response = await fetch(`/api/posts/${id}`);
+      const response = await fetch(`/api/admin/blogs/${id}`);
       if (!response.ok) throw new Error('Failed to fetch post');
       return response.json();
     },
@@ -94,42 +113,22 @@ export default function PostEditor() {
 
   // Fetch categories
   const { data: categories } = useQuery({
-    queryKey: ['/api/categories'],
-    queryFn: async () => {
-      const response = await fetch('/api/categories');
-      if (!response.ok) throw new Error('Failed to fetch categories');
-      return response.json();
-    }
-  });
-
-  // Fetch tags
-  const { data: availableTags } = useQuery({
-    queryKey: ['/api/tags'],
-    queryFn: async () => {
-      const response = await fetch('/api/tags');
-      if (!response.ok) throw new Error('Failed to fetch tags');
-      return response.json();
-    }
+    queryKey: ['/api/categories']
   });
 
   // Save post mutation
   const saveMutation = useMutation({
     mutationFn: async (data: PostFormData) => {
-      const url = isEditMode ? `/api/posts/${id}` : '/api/posts';
+      const url = isEditMode ? `/api/admin/blogs/${id}` : '/api/admin/blogs';
       const method = isEditMode ? 'PUT' : 'POST';
       
       return await apiRequest(url, {
         method,
-        body: JSON.stringify({
-          ...data,
-          tagIds: selectedTags,
-          published: data.status === 'published',
-          publishedAt: data.status === 'published' ? new Date() : undefined
-        })
+        body: JSON.stringify(data)
       });
     },
     onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/posts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/blogs'] });
       toast({
         title: isEditMode ? 'Post updated' : 'Post created',
         description: 'Your post has been saved successfully'
@@ -151,21 +150,25 @@ export default function PostEditor() {
   // Load post data when editing
   useEffect(() => {
     if (post && isEditMode) {
+      const seoMeta = post.seoMeta || {};
       form.reset({
         title: post.title,
-        slug: post.slug,
         content: post.content,
-        excerpt: post.excerpt || '',
-        categoryId: post.categoryId || '',
-        status: post.status,
+        author: post.author,
         featuredImage: post.featuredImage || '',
-        metaTitle: post.metaTitle || '',
-        metaDescription: post.metaDescription || '',
-        seoKeywords: post.seoKeywords || '',
-        canonicalUrl: post.canonicalUrl || '',
-        tags: post.tags?.map((t: any) => t.name) || []
+        categoryId: post.categoryId?.toString() || '',
+        tags: post.tags || '',
+        downloadLink: post.downloadLink || '',
+        status: post.status,
+        seoSlug: post.slug || post.seoSlug || '',
+        seoTitle: seoMeta.seoTitle || '',
+        seoDescription: seoMeta.seoDescription || '',
+        seoKeywords: seoMeta.seoKeywords || '',
+        canonicalUrl: seoMeta.canonicalUrl || '',
+        metaRobots: seoMeta.metaRobots || 'index_follow',
+        ogTitle: seoMeta.ogTitle || '',
+        ogDescription: seoMeta.ogDescription || ''
       });
-      setSelectedTags(post.tags?.map((t: any) => t.id) || []);
     }
   }, [post, isEditMode, form]);
 
@@ -175,22 +178,61 @@ export default function PostEditor() {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
-    form.setValue('slug', slug);
+    form.setValue('seoSlug', slug);
   };
 
-  const onSubmit = async (data: PostFormData) => {
-    await saveMutation.mutateAsync(data);
+  const onSubmit = async (data: PostFormData, status: 'draft' | 'published') => {
+    await saveMutation.mutateAsync({ ...data, status });
   };
 
-  const addTag = () => {
-    if (tagInput && !selectedTags.includes(tagInput)) {
-      setSelectedTags([...selectedTags, tagInput]);
-      setTagInput('');
+  // Apply formatting to content
+  const applyFormatting = (format: string) => {
+    const textarea = document.getElementById('content-editor') as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = textarea.value.substring(start, end);
+    const beforeText = textarea.value.substring(0, start);
+    const afterText = textarea.value.substring(end);
+
+    let formattedText = selectedText;
+    switch (format) {
+      case 'bold':
+        formattedText = `**${selectedText}**`;
+        break;
+      case 'italic':
+        formattedText = `*${selectedText}*`;
+        break;
+      case 'underline':
+        formattedText = `<u>${selectedText}</u>`;
+        break;
+      case 'list':
+        formattedText = selectedText.split('\n').map(line => `- ${line}`).join('\n');
+        break;
+      case 'ordered':
+        formattedText = selectedText.split('\n').map((line, i) => `${i + 1}. ${line}`).join('\n');
+        break;
+      case 'link':
+        formattedText = `[${selectedText}](url)`;
+        break;
+      case 'quote':
+        formattedText = `> ${selectedText}`;
+        break;
+      case 'code':
+        formattedText = `\`${selectedText}\``;
+        break;
     }
-  };
 
-  const removeTag = (tagId: string) => {
-    setSelectedTags(selectedTags.filter(t => t !== tagId));
+    const newContent = beforeText + formattedText + afterText;
+    form.setValue('content', newContent);
+    
+    // Restore cursor position
+    setTimeout(() => {
+      textarea.selectionStart = start;
+      textarea.selectionEnd = start + formattedText.length;
+      textarea.focus();
+    }, 0);
   };
 
   if (postLoading) {
@@ -209,385 +251,538 @@ export default function PostEditor() {
       description={isEditMode ? 'Edit your blog post' : 'Create a new blog post'}
     >
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          {/* Action Buttons */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPreviewMode(!previewMode)}
-                data-testid="button-preview"
-              >
-                <Eye className="mr-2 h-4 w-4" />
-                {previewMode ? 'Edit' : 'Preview'}
-              </Button>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                type="submit"
-                variant="outline"
-                onClick={() => form.setValue('status', 'draft')}
-                disabled={saveMutation.isPending}
-                data-testid="button-save-draft"
-              >
-                <Save className="mr-2 h-4 w-4" />
-                Save Draft
-              </Button>
-              <Button
-                type="submit"
-                onClick={() => form.setValue('status', 'published')}
-                disabled={saveMutation.isPending}
-                data-testid="button-publish"
-              >
-                {saveMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Publish
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
+        <form onSubmit={form.handleSubmit((data) => onSubmit(data, 'published'))} className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Content Area */}
+            <div className="lg:col-span-2 space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Post Content</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Title Field */}
+                  <FormField
+                    control={form.control}
+                    name="title"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Title</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Enter post title"
+                            className="text-lg"
+                            data-testid="input-title"
+                            onBlur={(e) => {
+                              field.onBlur();
+                              if (!form.getValues('seoSlug')) {
+                                generateSlug(e.target.value);
+                              }
+                              if (!form.getValues('seoTitle')) {
+                                form.setValue('seoTitle', e.target.value.substring(0, 60));
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-          {previewMode ? (
-            // Preview Mode
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-3xl">{form.watch('title')}</CardTitle>
-                {form.watch('excerpt') && (
-                  <CardDescription className="text-lg">{form.watch('excerpt')}</CardDescription>
-                )}
-              </CardHeader>
-              <CardContent>
-                <div className="prose prose-lg max-w-none" dangerouslySetInnerHTML={{ __html: form.watch('content') }} />
-              </CardContent>
-            </Card>
-          ) : (
-            // Edit Mode
-            <Tabs defaultValue="content" className="space-y-4">
-              <TabsList>
-                <TabsTrigger value="content">Content</TabsTrigger>
-                <TabsTrigger value="seo">SEO</TabsTrigger>
-                <TabsTrigger value="settings">Settings</TabsTrigger>
-              </TabsList>
+                  {/* Author Field */}
+                  <FormField
+                    control={form.control}
+                    name="author"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Author</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center space-x-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <Input
+                              {...field}
+                              placeholder="Author name"
+                              data-testid="input-author"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <TabsContent value="content" className="space-y-4">
+                  {/* Formatting Toolbar */}
+                  <div className="border rounded-md p-2 bg-muted/30">
+                    <div className="flex flex-wrap gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => applyFormatting('bold')}
+                        data-testid="button-bold"
+                      >
+                        <Bold className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => applyFormatting('italic')}
+                        data-testid="button-italic"
+                      >
+                        <Italic className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => applyFormatting('underline')}
+                        data-testid="button-underline"
+                      >
+                        <Underline className="h-4 w-4" />
+                      </Button>
+                      <Separator orientation="vertical" className="h-6" />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => applyFormatting('list')}
+                        data-testid="button-list"
+                      >
+                        <List className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => applyFormatting('ordered')}
+                        data-testid="button-ordered-list"
+                      >
+                        <ListOrdered className="h-4 w-4" />
+                      </Button>
+                      <Separator orientation="vertical" className="h-6" />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => applyFormatting('link')}
+                        data-testid="button-link"
+                      >
+                        <Link className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => applyFormatting('quote')}
+                        data-testid="button-quote"
+                      >
+                        <Quote className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => applyFormatting('code')}
+                        data-testid="button-code"
+                      >
+                        <Code className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Content Editor */}
+                  <FormField
+                    control={form.control}
+                    name="content"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Content</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            id="content-editor"
+                            placeholder="Write your post content here. You can use Markdown for formatting..."
+                            rows={20}
+                            className="font-mono text-sm"
+                            data-testid="input-content"
+                          />
+                        </FormControl>
+                        <FormDescription>Supports Markdown formatting</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* SEO Settings Section (Expandable) */}
+              <Collapsible open={seoExpanded} onOpenChange={setSeoExpanded}>
                 <Card>
                   <CardHeader>
-                    <CardTitle>Post Content</CardTitle>
-                    <CardDescription>Write your blog post content</CardDescription>
+                    <CollapsibleTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        className="w-full justify-between p-0 hover:bg-transparent"
+                        type="button"
+                      >
+                        <div>
+                          <CardTitle className="flex items-center gap-2">
+                            <Settings2 className="h-4 w-4" />
+                            SEO Settings
+                          </CardTitle>
+                          <CardDescription>Optimize your post for search engines</CardDescription>
+                        </div>
+                        <ChevronDown className={`h-4 w-4 transition-transform ${seoExpanded ? 'rotate-180' : ''}`} />
+                      </Button>
+                    </CollapsibleTrigger>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="title"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Title</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="Enter post title"
-                              data-testid="input-title"
-                              onBlur={(e) => {
-                                field.onBlur();
-                                if (!form.getValues('slug')) {
-                                  generateSlug(e.target.value);
-                                }
-                              }}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="slug"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Slug</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="post-url-slug"
-                              data-testid="input-slug"
-                            />
-                          </FormControl>
-                          <FormDescription>URL-friendly version of the title</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="excerpt"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Excerpt</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              {...field}
-                              placeholder="Brief description of your post"
-                              rows={3}
-                              data-testid="input-excerpt"
-                            />
-                          </FormControl>
-                          <FormDescription>A short summary of your post</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="content"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Content</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              {...field}
-                              placeholder="Write your post content here..."
-                              rows={15}
-                              className="font-mono"
-                              data-testid="input-content"
-                            />
-                          </FormControl>
-                          <FormDescription>You can use Markdown for formatting</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="featuredImage"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Featured Image</FormLabel>
-                          <FormControl>
-                            <div className="flex items-center space-x-2">
+                  <CollapsibleContent>
+                    <CardContent className="space-y-4">
+                      {/* SEO Title */}
+                      <FormField
+                        control={form.control}
+                        name="seoTitle"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>SEO Title</FormLabel>
+                            <FormControl>
                               <Input
                                 {...field}
-                                placeholder="https://example.com/image.jpg"
-                                data-testid="input-featured-image"
+                                placeholder="SEO optimized title"
+                                maxLength={60}
+                                data-testid="input-seo-title"
                               />
-                              <Button type="button" variant="outline" size="icon">
-                                <Image className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </FormControl>
-                          <FormDescription>URL of the featured image</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="seo" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>SEO Settings</CardTitle>
-                    <CardDescription>Optimize your post for search engines</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="metaTitle"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Meta Title</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="SEO optimized title"
-                              maxLength={60}
-                              data-testid="input-meta-title"
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            {field.value?.length || 0}/60 characters
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="metaDescription"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Meta Description</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              {...field}
-                              placeholder="SEO optimized description"
-                              rows={3}
-                              maxLength={160}
-                              data-testid="input-meta-description"
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            {field.value?.length || 0}/160 characters
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="seoKeywords"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Keywords</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="forex, trading, mt4, expert advisor"
-                              data-testid="input-keywords"
-                            />
-                          </FormControl>
-                          <FormDescription>Comma-separated keywords</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="canonicalUrl"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Canonical URL</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="https://example.com/original-post"
-                              data-testid="input-canonical"
-                            />
-                          </FormControl>
-                          <FormDescription>Optional: Original URL if this is republished content</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="settings" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Post Settings</CardTitle>
-                    <CardDescription>Configure post category and tags</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="categoryId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Category</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-category">
-                                <SelectValue placeholder="Select a category" />
-                              </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
-                              <SelectItem value="">None</SelectItem>
-                              {categories?.map((category: any) => (
-                                <SelectItem key={category.id} value={category.id}>
-                                  {category.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                            <FormDescription>
+                              {field.value?.length || 0}/60 characters
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                    <div className="space-y-2">
-                      <Label>Tags</Label>
-                      <div className="flex items-center space-x-2">
-                        <Input
-                          value={tagInput}
-                          onChange={(e) => setTagInput(e.target.value)}
-                          placeholder="Add tag"
-                          onKeyPress={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              addTag();
-                            }
-                          }}
-                          data-testid="input-tag"
-                        />
-                        <Button type="button" onClick={addTag} variant="outline">
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {selectedTags.map((tagId) => {
-                          const tag = availableTags?.find((t: any) => t.id === tagId);
-                          return (
-                            <Badge key={tagId} variant="secondary" data-testid={`tag-${tagId}`}>
-                              {tag?.name || tagId}
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4 ml-2 p-0"
-                                onClick={() => removeTag(tagId)}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </Badge>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <FormField
-                      control={form.control}
-                      name="status"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Status</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      {/* SEO Description */}
+                      <FormField
+                        control={form.control}
+                        name="seoDescription"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>SEO Description</FormLabel>
                             <FormControl>
-                              <SelectTrigger data-testid="select-status">
-                                <SelectValue placeholder="Select status" />
-                              </SelectTrigger>
+                              <Textarea
+                                {...field}
+                                placeholder="Brief description for search engines"
+                                rows={3}
+                                maxLength={160}
+                                data-testid="input-seo-description"
+                              />
                             </FormControl>
-                            <SelectContent>
-                              <SelectItem value="draft">Draft</SelectItem>
-                              <SelectItem value="published">Published</SelectItem>
-                              <SelectItem value="archived">Archived</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </CardContent>
+                            <FormDescription>
+                              {field.value?.length || 0}/160 characters
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* SEO Keywords */}
+                      <FormField
+                        control={form.control}
+                        name="seoKeywords"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>SEO Keywords</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                placeholder="keyword1, keyword2, keyword3"
+                                data-testid="input-seo-keywords"
+                              />
+                            </FormControl>
+                            <FormDescription>Comma-separated keywords</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* SEO Slug */}
+                      <FormField
+                        control={form.control}
+                        name="seoSlug"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>SEO Slug</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                placeholder="post-url-slug"
+                                data-testid="input-seo-slug"
+                              />
+                            </FormControl>
+                            <FormDescription>URL-friendly version of the title</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Canonical URL */}
+                      <FormField
+                        control={form.control}
+                        name="canonicalUrl"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Canonical URL</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                placeholder="https://example.com/original-post"
+                                data-testid="input-canonical-url"
+                              />
+                            </FormControl>
+                            <FormDescription>Optional: Original URL if republished</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </CardContent>
+                  </CollapsibleContent>
                 </Card>
-              </TabsContent>
-            </Tabs>
-          )}
+              </Collapsible>
+            </div>
+
+            {/* Right Sidebar */}
+            <div className="space-y-6">
+              {/* Publishing Options */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Publishing</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        form.setValue('status', 'draft');
+                        form.handleSubmit((data) => onSubmit(data, 'draft'))();
+                      }}
+                      disabled={saveMutation.isPending}
+                      data-testid="button-save-draft"
+                    >
+                      <Save className="mr-2 h-4 w-4" />
+                      Save Draft
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="bg-green-600 hover:bg-green-700"
+                      disabled={saveMutation.isPending}
+                      data-testid="button-publish"
+                    >
+                      {saveMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="mr-2 h-4 w-4" />
+                          Publish Post
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Category & Tags */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Organization</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Category Selector */}
+                  <FormField
+                    control={form.control}
+                    name="categoryId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Category</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-category">
+                              <SelectValue placeholder="Select a category" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {categories?.map((category: any) => (
+                              <SelectItem key={category.id} value={category.id.toString()}>
+                                {category.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Tags Input */}
+                  <FormField
+                    control={form.control}
+                    name="tags"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tags</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="tag1, tag2, tag3"
+                            data-testid="input-tags"
+                          />
+                        </FormControl>
+                        <FormDescription>Comma-separated tags</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Media & Links */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Media & Links</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Featured Image */}
+                  <FormField
+                    control={form.control}
+                    name="featuredImage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Featured Image</FormLabel>
+                        <FormControl>
+                          <div className="space-y-2">
+                            <Input
+                              {...field}
+                              placeholder="https://example.com/image.jpg"
+                              data-testid="input-featured-image"
+                            />
+                            <Button type="button" variant="outline" size="sm" className="w-full">
+                              <Image className="mr-2 h-4 w-4" />
+                              Upload Image
+                            </Button>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Download Link */}
+                  <FormField
+                    control={form.control}
+                    name="downloadLink"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Download Link</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="https://example.com/download.zip"
+                            data-testid="input-download-link"
+                          />
+                        </FormControl>
+                        <FormDescription>Optional download URL</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Open Graph & Meta */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Social Media</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Meta Robots */}
+                  <FormField
+                    control={form.control}
+                    name="metaRobots"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Meta Robots</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-meta-robots">
+                              <SelectValue placeholder="Select indexing option" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="index_follow">Index, Follow</SelectItem>
+                            <SelectItem value="noindex_follow">No Index, Follow</SelectItem>
+                            <SelectItem value="index_nofollow">Index, No Follow</SelectItem>
+                            <SelectItem value="noindex_nofollow">No Index, No Follow</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* OG Title */}
+                  <FormField
+                    control={form.control}
+                    name="ogTitle"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>OG Title</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Social media title"
+                            maxLength={60}
+                            data-testid="input-og-title"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {field.value?.length || 0}/60
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* OG Description */}
+                  <FormField
+                    control={form.control}
+                    name="ogDescription"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>OG Description</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            placeholder="Social media description"
+                            rows={2}
+                            maxLength={160}
+                            data-testid="input-og-description"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {field.value?.length || 0}/160
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </form>
       </Form>
     </AdminLayout>

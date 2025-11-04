@@ -3,93 +3,82 @@ import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell
+  BarChart,
+  Bar
 } from 'recharts';
 import {
   FileText,
-  Download,
-  Users,
+  CheckCircle,
+  Edit,
   Eye,
   TrendingUp,
   Plus,
   Activity,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Search,
+  MousePointerClick,
+  Target,
+  BarChart3,
+  Clock
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { format } from 'date-fns';
-
-// Mock data for charts - replace with actual API data
-const trafficData = [
-  { name: 'Mon', views: 4000, downloads: 240 },
-  { name: 'Tue', views: 3000, downloads: 139 },
-  { name: 'Wed', views: 2000, downloads: 980 },
-  { name: 'Thu', views: 2780, downloads: 390 },
-  { name: 'Fri', views: 1890, downloads: 480 },
-  { name: 'Sat', views: 2390, downloads: 380 },
-  { name: 'Sun', views: 3490, downloads: 430 }
-];
-
-const platformData = [
-  { name: 'MT4', value: 60, color: '#0088FE' },
-  { name: 'MT5', value: 40, color: '#00C49F' }
-];
 
 interface StatsData {
   posts: { total: number; published: number; draft: number };
   downloads: { total: number; today: number; week: number };
   users: { total: number; active: number; new: number };
-  analytics: { pageViews: number; uniqueVisitors: number; avgSessionDuration: string };
+  analytics: { pageViews: number; totalViews: number; uniqueVisitors: number; avgSessionDuration: string };
+  comments: { total: number; pending: number };
+  categories: { total: number };
 }
 
-interface RecentActivity {
-  id: string;
-  type: 'post' | 'download' | 'user' | 'comment';
+interface SeoPerformance {
+  searchTraffic: { value: number; period: string; change: string };
+  impressions: { value: number; period: string; change: string };
+  keywordsRanking: { value: number; total: number; percentage: number };
+  avgPosition: { value: number; change: string };
+  weeklyTraffic: Array<{ name: string; views: number; downloads: number }>;
+}
+
+interface BlogData {
+  id: number;
   title: string;
-  timestamp: Date;
-  user?: string;
+  slug: string;
+  author: string;
+  status: string;
+  views: number;
+  createdAt: string;
+  category: string | null;
+  commentsCount: number;
+  featuredImage: string;
 }
 
 export default function AdminDashboard() {
-  // Fetch statistics
+  // Fetch statistics from real API
   const { data: stats, isLoading: statsLoading } = useQuery<StatsData>({
-    queryKey: ['/api/admin/stats'],
-    queryFn: async () => {
-      // Mock data - replace with actual API call
-      return {
-        posts: { total: 156, published: 142, draft: 14 },
-        downloads: { total: 1234, today: 45, week: 312 },
-        users: { total: 8567, active: 2341, new: 123 },
-        analytics: { pageViews: 45678, uniqueVisitors: 12345, avgSessionDuration: '3:45' }
-      };
-    }
+    queryKey: ['/api/admin/stats']
   });
 
-  // Fetch recent activities
-  const { data: activities, isLoading: activitiesLoading } = useQuery<RecentActivity[]>({
-    queryKey: ['/api/admin/activities'],
-    queryFn: async () => {
-      // Mock data - replace with actual API call
-      return [
-        { id: '1', type: 'post', title: 'New blog post published: Advanced Trading Strategies', timestamp: new Date(), user: 'admin' },
-        { id: '2', type: 'download', title: 'MT5 EA v2.0 uploaded', timestamp: new Date(Date.now() - 3600000), user: 'admin' },
-        { id: '3', type: 'user', title: 'New user registered: trader123', timestamp: new Date(Date.now() - 7200000) },
-        { id: '4', type: 'comment', title: 'New comment on: Grid Trading EA Review', timestamp: new Date(Date.now() - 10800000), user: 'user456' },
-        { id: '5', type: 'download', title: 'Scalping Bot v1.5 downloaded 25 times', timestamp: new Date(Date.now() - 14400000) }
-      ];
-    }
+  // Fetch SEO performance data
+  const { data: seoPerformance, isLoading: seoLoading } = useQuery<SeoPerformance>({
+    queryKey: ['/api/admin/seo-performance']
+  });
+
+  // Fetch recent blogs
+  const { data: recentBlogs, isLoading: blogsLoading } = useQuery<{ data: BlogData[] }>({
+    queryKey: ['/api/admin/blogs', { limit: 5, sortBy: 'createdAt', sortOrder: 'desc' }]
   });
 
   const StatCard = ({ 
@@ -97,29 +86,85 @@ export default function AdminDashboard() {
     value, 
     description, 
     icon: Icon, 
-    trend 
+    trend,
+    loading = false 
   }: { 
     title: string; 
     value: string | number; 
-    description: string; 
+    description?: string; 
     icon: React.ComponentType<{ className?: string }>; 
-    trend?: 'up' | 'down' 
+    trend?: 'up' | 'down';
+    loading?: boolean;
   }) => (
-    <Card data-testid={`stat-${title.toLowerCase().replace(' ', '-')}`}>
+    <Card data-testid={`stat-${title.toLowerCase().replace(/\s+/g, '-')}`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        <div className="flex items-center space-x-1">
-          <p className="text-xs text-muted-foreground">{description}</p>
-          {trend && (
-            <span className={`flex items-center text-xs ${trend === 'up' ? 'text-green-500' : 'text-red-500'}`}>
-              {trend === 'up' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-            </span>
-          )}
-        </div>
+        {loading ? (
+          <>
+            <Skeleton className="h-8 w-20 mb-2" />
+            <Skeleton className="h-3 w-32" />
+          </>
+        ) : (
+          <>
+            <div className="text-2xl font-bold">{value}</div>
+            {description && (
+              <div className="flex items-center space-x-1">
+                <p className="text-xs text-muted-foreground">{description}</p>
+                {trend && (
+                  <span className={`flex items-center text-xs ${trend === 'up' ? 'text-green-500' : 'text-red-500'}`}>
+                    {trend === 'up' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                  </span>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const SeoCard = ({ 
+    title, 
+    value, 
+    period, 
+    change,
+    icon: Icon,
+    loading = false
+  }: { 
+    title: string; 
+    value: string | number; 
+    period?: string; 
+    change?: string;
+    icon: React.ComponentType<{ className?: string }>;
+    loading?: boolean;
+  }) => (
+    <Card data-testid={`seo-${title.toLowerCase().replace(/\s+/g, '-')}`}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <>
+            <Skeleton className="h-8 w-24 mb-2" />
+            <Skeleton className="h-3 w-28" />
+          </>
+        ) : (
+          <>
+            <div className="text-2xl font-bold">{value}</div>
+            <div className="flex items-center justify-between">
+              {period && <p className="text-xs text-muted-foreground">{period}</p>}
+              {change && (
+                <span className={`text-xs font-medium ${change.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>
+                  {change}
+                </span>
+              )}
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
@@ -148,148 +193,230 @@ export default function AdminDashboard() {
         </Link>
       </div>
 
-      {/* Statistics Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-        {statsLoading ? (
-          <>
-            {[...Array(4)].map((_, i) => (
-              <Card key={i}>
-                <CardHeader className="space-y-0 pb-2">
-                  <Skeleton className="h-4 w-24" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-20 mb-2" />
-                  <Skeleton className="h-3 w-32" />
-                </CardContent>
-              </Card>
-            ))}
-          </>
-        ) : stats ? (
-          <>
-            <StatCard
-              title="Total Posts"
-              value={stats.posts.total}
-              description={`${stats.posts.published} published, ${stats.posts.draft} drafts`}
-              icon={FileText}
-              trend="up"
-            />
-            <StatCard
-              title="Downloads"
-              value={stats.downloads.total}
-              description={`${stats.downloads.today} today, ${stats.downloads.week} this week`}
-              icon={Download}
-              trend="up"
-            />
-            <StatCard
-              title="Total Users"
-              value={stats.users.total.toLocaleString()}
-              description={`${stats.users.active.toLocaleString()} active, ${stats.users.new} new`}
-              icon={Users}
-              trend="up"
-            />
-            <StatCard
-              title="Page Views"
-              value={stats.analytics.pageViews.toLocaleString()}
-              description={`${stats.analytics.uniqueVisitors.toLocaleString()} unique visitors`}
-              icon={Eye}
-              trend="down"
-            />
-          </>
-        ) : null}
+      {/* Top Stats Cards - 4 in a row */}
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4 mb-6">
+        <StatCard
+          title="Total Blogs"
+          value={stats?.posts.total || 0}
+          icon={FileText}
+          loading={statsLoading}
+        />
+        <StatCard
+          title="Published"
+          value={stats?.posts.published || 0}
+          icon={CheckCircle}
+          loading={statsLoading}
+        />
+        <StatCard
+          title="Drafts"
+          value={stats?.posts.draft || 0}
+          icon={Edit}
+          loading={statsLoading}
+        />
+        <StatCard
+          title="Total Views"
+          value={stats?.analytics.totalViews?.toLocaleString() || 0}
+          icon={Eye}
+          loading={statsLoading}
+        />
       </div>
 
-      {/* Charts Row */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
-        {/* Traffic Chart */}
-        <Card className="lg:col-span-2" data-testid="chart-traffic">
-          <CardHeader>
-            <CardTitle>Traffic Overview</CardTitle>
-            <CardDescription>Page views and downloads over the past week</CardDescription>
-          </CardHeader>
-          <CardContent>
+      {/* SEO Performance Section */}
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold mb-4">SEO Performance</h2>
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+          <SeoCard
+            title="Search Traffic"
+            value={seoPerformance?.searchTraffic.value?.toLocaleString() || 0}
+            period={seoPerformance?.searchTraffic.period}
+            change={seoPerformance?.searchTraffic.change}
+            icon={Search}
+            loading={seoLoading}
+          />
+          <SeoCard
+            title="Impressions"
+            value={seoPerformance?.impressions.value?.toLocaleString() || 0}
+            period={seoPerformance?.impressions.period}
+            change={seoPerformance?.impressions.change}
+            icon={MousePointerClick}
+            loading={seoLoading}
+          />
+          <SeoCard
+            title="Keywords Ranking"
+            value={seoPerformance?.keywordsRanking.value || 0}
+            period={`${seoPerformance?.keywordsRanking.percentage || 0}% coverage`}
+            icon={Target}
+            loading={seoLoading}
+          />
+          <SeoCard
+            title="Avg Position"
+            value={seoPerformance?.avgPosition.value || 0}
+            change={seoPerformance?.avgPosition.change}
+            icon={BarChart3}
+            loading={seoLoading}
+          />
+        </div>
+      </div>
+
+      {/* Weekly Traffic Chart */}
+      <Card className="mb-6" data-testid="chart-weekly-traffic">
+        <CardHeader>
+          <CardTitle>Weekly Traffic</CardTitle>
+          <CardDescription>Page views and downloads over the past week</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {seoLoading ? (
+            <Skeleton className="h-[300px] w-full" />
+          ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={trafficData}>
+              <AreaChart data={seoPerformance?.weeklyTraffic || []}>
+                <defs>
+                  <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorDownloads" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#82ca9d" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#82ca9d" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip />
-                <Line type="monotone" dataKey="views" stroke="#8884d8" name="Page Views" />
-                <Line type="monotone" dataKey="downloads" stroke="#82ca9d" name="Downloads" />
-              </LineChart>
+                <Area 
+                  type="monotone" 
+                  dataKey="views" 
+                  stroke="#8884d8" 
+                  fillOpacity={1} 
+                  fill="url(#colorViews)" 
+                  name="Page Views"
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="downloads" 
+                  stroke="#82ca9d" 
+                  fillOpacity={1} 
+                  fill="url(#colorDownloads)" 
+                  name="Downloads"
+                />
+              </AreaChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Platform Distribution */}
-        <Card data-testid="chart-platform">
-          <CardHeader>
-            <CardTitle>Platform Distribution</CardTitle>
-            <CardDescription>Downloads by platform</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={platformData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry) => `${entry.name}: ${entry.value}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {platformData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Activity */}
-      <Card data-testid="recent-activity">
+      {/* Recent Blogs Table */}
+      <Card data-testid="recent-blogs">
         <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>Latest actions and events on your site</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Recent Blogs</CardTitle>
+              <CardDescription>Latest blog posts and their performance</CardDescription>
+            </div>
+            <Link href="/admin/blogs">
+              <Button variant="outline" size="sm">
+                View All
+              </Button>
+            </Link>
+          </div>
         </CardHeader>
         <CardContent>
-          {activitiesLoading ? (
+          {blogsLoading ? (
             <div className="space-y-4">
               {[...Array(5)].map((_, i) => (
                 <div key={i} className="flex items-center space-x-4">
-                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <Skeleton className="h-10 w-10 rounded" />
                   <div className="flex-1 space-y-2">
                     <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-3 w-1/4" />
+                    <Skeleton className="h-3 w-1/2" />
                   </div>
+                  <Skeleton className="h-6 w-20" />
                 </div>
               ))}
             </div>
-          ) : activities ? (
-            <div className="space-y-4">
-              {activities.map((activity) => (
-                <div key={activity.id} className="flex items-center space-x-4" data-testid={`activity-${activity.id}`}>
-                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                    {activity.type === 'post' && <FileText className="h-5 w-5" />}
-                    {activity.type === 'download' && <Download className="h-5 w-5" />}
-                    {activity.type === 'user' && <Users className="h-5 w-5" />}
-                    {activity.type === 'comment' && <Eye className="h-5 w-5" />}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{activity.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(activity.timestamp, 'PPp')}
-                      {activity.user && ` by ${activity.user}`}
-                    </p>
-                  </div>
-                </div>
-              ))}
+          ) : recentBlogs?.data && recentBlogs.data.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Author</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Views</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentBlogs.data.map((blog) => (
+                  <TableRow key={blog.id} data-testid={`blog-row-${blog.id}`}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center space-x-3">
+                        {blog.featuredImage && (
+                          <div className="h-10 w-10 rounded overflow-hidden bg-muted">
+                            <img 
+                              src={blog.featuredImage} 
+                              alt="" 
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        )}
+                        <div>
+                          <p className="line-clamp-1">{blog.title}</p>
+                          {blog.category && (
+                            <p className="text-xs text-muted-foreground">{blog.category}</p>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>{blog.author}</TableCell>
+                    <TableCell>
+                      <Badge 
+                        variant={blog.status === 'published' ? 'default' : 'secondary'}
+                        className="capitalize"
+                      >
+                        {blog.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-1">
+                        <Eye className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-sm">{blog.views.toLocaleString()}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-1">
+                        <Clock className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-sm">
+                          {format(new Date(blog.createdAt), 'MMM d, yyyy')}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Link href={`/admin/editor/${blog.id}`}>
+                        <Button variant="ghost" size="sm">
+                          Edit
+                        </Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No blogs found</p>
+              <Link href="/admin/editor">
+                <Button variant="outline" className="mt-4">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Your First Blog
+                </Button>
+              </Link>
             </div>
-          ) : null}
+          )}
         </CardContent>
       </Card>
     </AdminLayout>
