@@ -1,0 +1,155 @@
+```plaintext
+You are an expert **Next.js 16+ (App Router)** developer and **Google SEO #1 strategist**. Build a **blazing-fast, fully SEO-optimized Forex EA blog** using **Next.js 16+ only** (latest stable version, App Router, React Server Components). The site must **rank #1 on Google** for high-volume keywords like:
+
+- “free MT4 indicators download”
+- “best MT5 EA 2025”
+- “MQL5 expert advisor free”
+- “forex robot MT4 no repaint”
+
+---
+
+### PROJECT NAME: **Forex EA Hub**  
+**Goal**: Simple, professional, conversion-focused blog + download platform with admin dashboard.  
+**Tech Stack**: Next.js 16+ (App Router), Tailwind CSS (optional, minimal), TypeScript, React Server Components, no client-side JS bloat.
+
+---
+
+## CORE REQUIREMENTS (GOOGLE RANKING #1 GUARANTEED)
+
+### 1. **100% SEO & Performance Optimized**
+| Feature | Implementation |
+|-------|----------------|
+| **SSR + SSG** | All blog posts → `generateStaticParams()` + `revalidate` ISR |
+| **Dynamic Metadata** | `generateMetadata()` in every page with unique title, desc, OG, Twitter |
+| **JSON-LD Schema** | `Article`, `SoftwareApplication`, `FAQPage`, `BreadcrumbList` |
+| **Sitemap & Robots** | Auto-generated via `app/sitemap.ts` and `app/robots.ts` |
+| **Image Optimization** | `next/image` with `loader="default"`, WebP, lazy, `priority` on hero |
+| **Core Web Vitals** | LCP < 1.8s, CLS < 0.1, FID < 100ms → 100 Lighthouse |
+| **Semantic HTML** | `<main>`, `<article>`, `<section>`, H1-H6 hierarchy |
+| **Internal Linking** | Related posts, category tags, breadcrumb |
+
+---
+
+### 2. **File-Based Routing (App Router – Next.js 16+)**
+
+```bash
+app/
+│
+├── layout.tsx                  → Root layout + Navbar + Footer
+├── page.tsx                    → Homepage (Hero + Featured Posts)
+├── sitemap.ts                  → Dynamic XML sitemap
+├── robots.ts                   → robots.txt
+│
+├── blog/
+│   ├── page.tsx                → Blog list (paginated)
+│   ├── [slug]/
+│   │   ├── page.tsx            → Single post (SSR + MDX)
+│   │   └── opengraph-image.tsx → Dynamic OG image
+│   └── category/
+│       └── [cat]/
+│           └── page.tsx        → Category archive
+│
+├── download/
+│   └── [id]/
+│       └── page.tsx            → Download page (EA file + instructions)
+│
+├── admin/
+│   ├── layout.tsx              → Protected admin layout
+│   ├── page.tsx                → Dashboard (stats, posts, uploads)
+│   ├── login/
+│   │   └── page.tsx
+│   └── posts/
+│       ├── new/page.tsx
+│       └── edit/[id]/page.tsx
+│
+└── api/
+    └── auth/[...nextauth]/route.ts  → NextAuth.js v5
+```
+
+---
+
+### 3. **UI/UX – Professional, Simple, Conversion-Focused**
+
+#### **Design Principles**:
+- **Clean, minimal, trust-building**
+- **Mobile-first** (60% traffic)
+- **Fast CTA buttons**: “Download EA”, “View Indicator”
+- **Trust signals**: Download count, last updated, user ratings
+- **Dark/light mode toggle** (optional, via `next-themes`)
+
+#### **Key Pages UI**:
+
+| Page | UI Elements |
+|------|-------------|
+| **Homepage** | Hero (H1 + CTA), Featured EAs (cards), Latest Posts, Newsletter |
+| **Blog Post** | Title, meta, TOC, content (MDX), download CTA, related posts, comments |
+| **Download Page** | EA name, version, compatibility (MT4/MT5), screenshot carousel, download button, setup guide |
+| **Admin Dashboard** | Sidebar, stats cards, post table, file upload (EA .ex4/.ex5), preview |
+
+---
+
+### 4. **Content & Features**
+
+- **MDX Blog Posts** → Write in `.mdx`, embed charts, code, download buttons
+- **File Downloads** → Store `.ex4`, `.ex5`, `.mq4` in `/public/downloads/` or Cloudinary
+- **Search** → `app/search/page.tsx` with instant results (no Algolia)
+- **Pagination + Infinite Scroll** (optional)
+- **Comments** → Optional (Utterances or Giscus – free, SEO-friendly)
+
+---
+
+### 5. **Admin Dashboard (Protected)**
+
+```ts
+// Middleware: app/middleware.ts
+matcher: ['/admin/:path*']
+```
+- Login via **NextAuth** (Google + Credentials)
+- Create/edit posts (MDX editor or simple form)
+- Upload EA files (with virus scan note)
+- View analytics (views, downloads)
+
+---
+
+### 6. **Deployment & SEO Final Touches**
+
+- **Deploy on Vercel** (auto-optimized)
+- **Custom Domain + SSL**
+- **Vercel Analytics + Speed Insights**
+- **Submit sitemap to Google Search Console**
+- **Preconnect fonts & CDN**
+
+---
+
+## PROMPT TO COPY-PASTE (FOR YOUR DEVELOPER / AI CODER)
+
+```prompt
+You are a Senior Next.js 16+ Full-Stack Engineer and SEO Expert. Build a **production-ready Forex EA blog** called **"Forex EA Hub"** using **Next.js 16+ App Router**, TypeScript, and minimal Tailwind CSS.
+
+### MUST INCLUDE:
+1. **App Router structure** as shown above.
+2. **SEO-first**: `generateMetadata()`, JSON-LD, `sitemap.ts`, `robots.ts`, SSR/SSG.
+3. **Blog posts in MDX** with download CTAs.
+4. **Download pages** with file serving and stats.
+5. **Admin dashboard** (protected via NextAuth v5).
+6. **Responsive, professional, minimal UI** – no bloat.
+7. **100 Lighthouse score** target.
+8. **Image optimization**, semantic HTML, fast navigation.
+
+### OUTPUT:
+- Full folder structure
+- Key files: `layout.tsx`, `page.tsx`, `[slug]/page.tsx`, `generateMetadata`, MDX setup
+- Admin login + post CRUD
+- Dynamic OG images
+- Search page
+- Deploy-ready for Vercel
+
+Build it step-by-step. Optimize for **Google #1 ranking** on "free MT4 indicators", "best MT5 EA".
+```
+
+---
+
+**Run this prompt in Claude, Cursor, or GitHub Copilot** → You’ll get a **complete, rank-ready Next.js 16+ blog**.
+
+Need me to **generate the full code** next? Just say: **“Generate the Next.js 16+ code now”**
+```
