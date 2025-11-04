@@ -26,7 +26,10 @@ import {
   Package,
   Users,
   Tags,
-  FolderOpen
+  FolderOpen,
+  Bot,
+  Image,
+  Search
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -52,24 +55,14 @@ const navItems: NavItem[] = [
     icon: Home
   },
   {
-    title: 'Posts',
-    href: '/admin/posts',
+    title: 'Blogs',
+    href: '/admin/blogs',
     icon: FileText
   },
   {
-    title: 'Post Editor',
-    href: '/admin/editor',
-    icon: PenSquare
-  },
-  {
-    title: 'Downloads',
-    href: '/admin/downloads',
-    icon: Download
-  },
-  {
-    title: 'Analytics',
-    href: '/admin/analytics',
-    icon: BarChart3
+    title: 'Signals/EAs',
+    href: '/admin/signals',
+    icon: Bot
   },
   {
     title: 'Categories',
@@ -77,14 +70,24 @@ const navItems: NavItem[] = [
     icon: FolderOpen
   },
   {
-    title: 'Tags',
-    href: '/admin/tags',
-    icon: Tags
-  },
-  {
     title: 'Users',
     href: '/admin/users',
     icon: Users
+  },
+  {
+    title: 'Media',
+    href: '/admin/media',
+    icon: Image
+  },
+  {
+    title: 'Analytics',
+    href: '/admin/analytics',
+    icon: BarChart3
+  },
+  {
+    title: 'SEO',
+    href: '/admin/seo',
+    icon: Search
   },
   {
     title: 'Settings',

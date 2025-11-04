@@ -23,9 +23,16 @@ import Login from "@/pages/Login";
 
 // Import admin pages
 import AdminDashboard from "@/pages/Admin/Dashboard";
+import BlogList from "@/pages/Admin/BlogList";
+import SignalList from "@/pages/Admin/SignalList";
+import SignalEditor from "@/pages/Admin/SignalEditor";
+import CategoryList from "@/pages/Admin/CategoryList";
+import UserList from "@/pages/Admin/UserList";
+import MediaManager from "@/pages/Admin/MediaManager";
+import SeoManager from "@/pages/Admin/SeoManager";
+import Analytics from "@/pages/Admin/Analytics";
 import PostEditor from "@/pages/Admin/PostEditor";
 import DownloadManager from "@/pages/Admin/DownloadManager";
-import Analytics from "@/pages/Admin/Analytics";
 
 function Router() {
   return (
@@ -50,9 +57,80 @@ function Router() {
           <AdminDashboard />
         </ProtectedRoute>
       </Route>
-      <Route path="/admin/posts">
+      
+      {/* Blog Management */}
+      <Route path="/admin/blogs">
         <ProtectedRoute requireAdmin={true}>
-          <AdminDashboard />
+          <BlogList />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/blogs/new">
+        <ProtectedRoute requireAdmin={true}>
+          <PostEditor />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/blogs/edit/:id">
+        <ProtectedRoute requireAdmin={true}>
+          <PostEditor />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* Signal/EA Management */}
+      <Route path="/admin/signals">
+        <ProtectedRoute requireAdmin={true}>
+          <SignalList />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/signals/new">
+        <ProtectedRoute requireAdmin={true}>
+          <SignalEditor />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/signals/edit/:id">
+        <ProtectedRoute requireAdmin={true}>
+          <SignalEditor />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* Category Management */}
+      <Route path="/admin/categories">
+        <ProtectedRoute requireAdmin={true}>
+          <CategoryList />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* User Management */}
+      <Route path="/admin/users">
+        <ProtectedRoute requireAdmin={true}>
+          <UserList />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* Media Manager */}
+      <Route path="/admin/media">
+        <ProtectedRoute requireAdmin={true}>
+          <MediaManager />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* Analytics */}
+      <Route path="/admin/analytics">
+        <ProtectedRoute requireAdmin={true}>
+          <Analytics />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* SEO Manager */}
+      <Route path="/admin/seo">
+        <ProtectedRoute requireAdmin={true}>
+          <SeoManager />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* Legacy routes for compatibility */}
+      <Route path="/admin/downloads">
+        <ProtectedRoute requireAdmin={true}>
+          <DownloadManager />
         </ProtectedRoute>
       </Route>
       <Route path="/admin/editor">
@@ -63,21 +141,6 @@ function Router() {
       <Route path="/admin/editor/:id">
         <ProtectedRoute requireAdmin={true}>
           <PostEditor />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/admin/downloads">
-        <ProtectedRoute requireAdmin={true}>
-          <DownloadManager />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/admin/analytics">
-        <ProtectedRoute requireAdmin={true}>
-          <Analytics />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/admin/:section">
-        <ProtectedRoute requireAdmin={true}>
-          <AdminDashboard />
         </ProtectedRoute>
       </Route>
       
