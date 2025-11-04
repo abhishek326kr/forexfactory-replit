@@ -26,6 +26,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import MemoryStore from "memorystore";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
+import bcrypt from "bcrypt";
 
 // Extend Express types to include user in request
 declare module 'express-serve-static-core' {
@@ -83,24 +84,40 @@ passport.use(new LocalStrategy(
   },
   async (email, password, done) => {
     try {
-      // Try to find user by email
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        // Also try by username
-        const userByUsername = await storage.authenticate(email, password);
-        if (!userByUsername) {
-          return done(null, false, { message: 'Invalid email or password' });
+      // Try to find admin by email or username
+      const admin = await prisma.admin.findFirst({
+        where: {
+          OR: [
+            { email: email },
+            { username: email }
+          ]
         }
-        return done(null, userByUsername);
-      }
+      });
       
-      // Authenticate using email
-      const authenticatedUser = await storage.authenticate(user.username, password);
-      if (!authenticatedUser) {
+      if (!admin) {
         return done(null, false, { message: 'Invalid email or password' });
       }
       
-      return done(null, authenticatedUser);
+      // Verify password
+      const isValidPassword = await bcrypt.compare(password, admin.password);
+      if (!isValidPassword) {
+        return done(null, false, { message: 'Invalid email or password' });
+      }
+      
+      // Return admin data as user
+      const user: User = {
+        id: admin.id.toString(),
+        email: admin.email,
+        username: admin.username,
+        password: admin.password,
+        role: admin.role === 'admin' ? 'admin' : 'user',
+        avatar: admin.profilePic,
+        bio: null,
+        createdAt: admin.createdAt,
+        updatedAt: admin.updatedAt || new Date()
+      };
+      
+      return done(null, user);
     } catch (error) {
       return done(error);
     }
@@ -115,7 +132,26 @@ passport.serializeUser((user: any, done) => {
 // Deserialize user from session
 passport.deserializeUser(async (id: string, done) => {
   try {
-    const user = await storage.getUser(id);
+    const admin = await prisma.admin.findUnique({
+      where: { id: parseInt(id) }
+    });
+    
+    if (!admin) {
+      return done(null, false);
+    }
+    
+    const user: User = {
+      id: admin.id.toString(),
+      email: admin.email,
+      username: admin.username,
+      password: admin.password,
+      role: admin.role === 'admin' ? 'admin' : 'user',
+      avatar: admin.profilePic,
+      bio: null,
+      createdAt: admin.createdAt,
+      updatedAt: admin.updatedAt || new Date()
+    };
+    
     done(null, user);
   } catch (error) {
     done(error);
@@ -235,41 +271,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/auth/register - User registration (optional, for creating admin users)
   app.post("/api/auth/register", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const { email, username, password, role } = req.body;
+      const { email, username, password, role, name, phone } = req.body;
       
       // Validate input
       if (!email || !username || !password) {
         return res.status(400).json({ error: 'Email, username, and password are required' });
       }
       
-      // Check if user already exists
-      const existingEmail = await storage.getUserByEmail(email);
-      const existingUsername = await storage.getUserByUsername(username);
-      
-      if (existingEmail) {
-        return res.status(400).json({ error: 'Email already registered' });
-      }
-      if (existingUsername) {
-        return res.status(400).json({ error: 'Username already taken' });
-      }
-      
-      // Create new user
-      const newUser = await storage.createUser({
-        email,
-        username,
-        password,
-        role: role || 'user'
+      // Check if admin already exists
+      const existingAdmin = await prisma.admin.findFirst({
+        where: {
+          OR: [
+            { email: email },
+            { username: username }
+          ]
+        }
       });
       
-      // Return user data without password
-      const { password: _, ...userWithoutPassword } = newUser;
+      if (existingAdmin) {
+        return res.status(400).json({ 
+          error: existingAdmin.email === email ? 'Email already registered' : 'Username already taken' 
+        });
+      }
+      
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
+      // Create new admin
+      const newAdmin = await prisma.admin.create({
+        data: {
+          email,
+          username,
+          password: hashedPassword,
+          name: name || username,
+          phone: phone || null,
+          role: role === 'admin' ? 'admin' : 'editor'
+        }
+      });
+      
+      // Return admin data without password
+      const { password: _, ...adminWithoutPassword } = newAdmin;
       res.status(201).json({ 
         success: true, 
-        user: userWithoutPassword 
+        user: adminWithoutPassword 
       });
     } catch (error) {
-      console.error("Error creating user:", error);
-      res.status(500).json({ error: "Failed to create user" });
+      console.error("Error creating admin:", error);
+      res.status(500).json({ error: "Failed to create admin" });
     }
   });
 
@@ -278,17 +326,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/posts - Get all published posts with pagination
   app.get("/api/posts", async (req: Request, res: Response) => {
     try {
-      const pagination = parsePagination(req);
-      const { status, category, tag, author } = req.query;
+      const { page, limit, sortBy, sortOrder } = parsePagination(req);
+      const { status } = req.query;
       
-      let result;
-      if (status === 'all' && isAdmin(req)) {
-        result = await storage.findAllPosts(pagination);
-      } else {
-        result = await storage.findPublishedPosts(pagination);
+      const skip = (page - 1) * limit;
+      const where: any = {};
+      
+      // Show all posts for admin, otherwise only published
+      if (!(status === 'all' && isAdmin(req))) {
+        where.status = 'published';
       }
       
-      res.json(result);
+      const [blogs, total] = await Promise.all([
+        prisma.blog.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { [sortBy === 'createdAt' ? 'createdAt' : sortBy]: sortOrder },
+          include: {
+            categories: {
+              include: {
+                category: true
+              }
+            }
+          }
+        }),
+        prisma.blog.count({ where })
+      ]);
+      
+      // Format data to match expected response
+      const formattedData = blogs.map(blog => ({
+        id: blog.id.toString(),
+        title: blog.title,
+        slug: blog.seoSlug,
+        content: blog.content,
+        excerpt: blog.content.substring(0, 200) + '...',
+        author: blog.author,
+        authorId: '1', // Default since we don't have authorId
+        categoryId: blog.categoryId.toString(),
+        category: blog.categories[0]?.category?.name || null,
+        featuredImage: blog.featuredImage,
+        published: blog.status === 'published',
+        publishedAt: blog.createdAt,
+        status: blog.status,
+        views: blog.views || 0,
+        tags: blog.tags,
+        createdAt: blog.createdAt,
+        updatedAt: blog.createdAt
+      }));
+      
+      res.json({
+        data: formattedData,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit)
+      });
     } catch (error) {
       console.error("Error fetching posts:", error);
       res.status(500).json({ error: "Failed to fetch posts" });
@@ -303,25 +395,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Search query is required" });
       }
       
-      const pagination = parsePagination(req);
-      const allPosts = await storage.findPublishedPosts({ ...pagination, limit: 100 });
+      const { page, limit } = parsePagination(req);
+      const searchTerm = q.toString();
       
-      // Simple search implementation - filter by title and content
-      const searchTerm = q.toString().toLowerCase();
-      const filtered = allPosts.data.filter(post => 
-        post.title.toLowerCase().includes(searchTerm) ||
-        post.content.toLowerCase().includes(searchTerm) ||
-        (post.excerpt && post.excerpt.toLowerCase().includes(searchTerm))
-      );
+      // Search in title and content
+      const blogs = await prisma.blog.findMany({
+        where: {
+          status: 'published',
+          OR: [
+            { title: { contains: searchTerm } },
+            { content: { contains: searchTerm } }
+          ]
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          categories: {
+            include: {
+              category: true
+            }
+          }
+        }
+      });
       
-      // Track search analytics
-      await storage.trackSearch(searchTerm, filtered.length);
+      const total = await prisma.blog.count({
+        where: {
+          status: 'published',
+          OR: [
+            { title: { contains: searchTerm } },
+            { content: { contains: searchTerm } }
+          ]
+        }
+      });
+      
+      // Format data
+      const formattedData = blogs.map(blog => ({
+        id: blog.id.toString(),
+        title: blog.title,
+        slug: blog.seoSlug,
+        content: blog.content,
+        excerpt: blog.content.substring(0, 200) + '...',
+        author: blog.author,
+        categoryId: blog.categoryId.toString(),
+        category: blog.categories[0]?.category?.name || null,
+        featuredImage: blog.featuredImage,
+        published: blog.status === 'published',
+        status: blog.status,
+        views: blog.views || 0,
+        tags: blog.tags,
+        createdAt: blog.createdAt
+      }));
       
       res.json({ 
-        data: filtered.slice((pagination.page - 1) * pagination.limit, pagination.page * pagination.limit),
-        total: filtered.length,
-        page: pagination.page,
-        totalPages: Math.ceil(filtered.length / pagination.limit),
+        data: formattedData,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
         query: q 
       });
     } catch (error) {
@@ -334,19 +463,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/posts/:slug", async (req: Request, res: Response) => {
     try {
       const { slug } = req.params;
-      const post = await storage.findPostBySlug(slug);
       
-      if (!post) {
+      // Find and increment view count in a transaction
+      const blog = await prisma.$transaction(async (tx) => {
+        const foundBlog = await tx.blog.findFirst({
+          where: { seoSlug: slug },
+          include: {
+            categories: {
+              include: {
+                category: true
+              }
+            },
+            seoMeta: true
+          }
+        });
+        
+        if (foundBlog) {
+          await tx.blog.update({
+            where: { id: foundBlog.id },
+            data: { views: { increment: 1 } }
+          });
+        }
+        
+        return foundBlog;
+      });
+      
+      if (!blog) {
         return res.status(404).json({ error: "Post not found" });
       }
       
-      // Increment view count
-      await storage.incrementPostViews(post.id);
+      // Format response
+      const formattedPost = {
+        id: blog.id.toString(),
+        title: blog.title,
+        slug: blog.seoSlug,
+        content: blog.content,
+        excerpt: blog.content.substring(0, 200) + '...',
+        author: blog.author,
+        authorId: '1',
+        categoryId: blog.categoryId.toString(),
+        category: blog.categories[0]?.category?.name || null,
+        featuredImage: blog.featuredImage,
+        published: blog.status === 'published',
+        status: blog.status,
+        views: (blog.views || 0) + 1, // Include the increment
+        tags: blog.tags ? blog.tags.split(',').map(t => t.trim()) : [],
+        createdAt: blog.createdAt,
+        seoMeta: blog.seoMeta[0] || null
+      };
       
-      // Get tags for the post
-      const tags = await storage.getPostTags(post.id);
-      
-      res.json({ ...post, tags });
+      res.json(formattedPost);
     } catch (error) {
       console.error("Error fetching post:", error);
       res.status(500).json({ error: "Failed to fetch post" });
@@ -357,15 +523,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/posts/category/:categorySlug", async (req: Request, res: Response) => {
     try {
       const { categorySlug } = req.params;
-      const pagination = parsePagination(req);
+      const { page, limit, sortBy, sortOrder } = parsePagination(req);
       
-      const category = await storage.findCategoryBySlug(categorySlug);
+      // Find category by name (using name as slug)
+      const category = await prisma.category.findFirst({
+        where: { 
+          name: categorySlug.replace(/-/g, ' ') // Convert slug back to name
+        }
+      });
+      
       if (!category) {
         return res.status(404).json({ error: "Category not found" });
       }
       
-      const posts = await storage.getPostsByCategory(category.id, pagination);
-      res.json(posts);
+      const skip = (page - 1) * limit;
+      
+      // Get blogs for this category
+      const [blogs, total] = await Promise.all([
+        prisma.blog.findMany({
+          where: {
+            categoryId: category.categoryId,
+            status: 'published'
+          },
+          skip,
+          take: limit,
+          orderBy: { [sortBy === 'createdAt' ? 'createdAt' : sortBy]: sortOrder },
+          include: {
+            categories: {
+              include: {
+                category: true
+              }
+            }
+          }
+        }),
+        prisma.blog.count({
+          where: {
+            categoryId: category.categoryId,
+            status: 'published'
+          }
+        })
+      ]);
+      
+      // Format data
+      const formattedData = blogs.map(blog => ({
+        id: blog.id.toString(),
+        title: blog.title,
+        slug: blog.seoSlug,
+        content: blog.content,
+        excerpt: blog.content.substring(0, 200) + '...',
+        author: blog.author,
+        categoryId: blog.categoryId.toString(),
+        category: category.name,
+        featuredImage: blog.featuredImage,
+        published: blog.status === 'published',
+        status: blog.status,
+        views: blog.views || 0,
+        tags: blog.tags,
+        createdAt: blog.createdAt
+      }));
+      
+      res.json({
+        data: formattedData,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit)
+      });
     } catch (error) {
       console.error("Error fetching posts by category:", error);
       res.status(500).json({ error: "Failed to fetch posts" });
@@ -435,20 +657,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/posts - Create new post (admin only)
   app.post("/api/posts", requireAdmin, async (req: Request, res: Response) => {
     try {
+      const { 
+        title, content, slug, excerpt, author, authorId, categoryId, 
+        featuredImage, published, status, tags, seoTitle, seoDescription, seoKeywords 
+      } = req.body;
       
-      const validatedData = insertPostSchema.parse(req.body);
-      const post = await storage.createPost(validatedData);
+      // Generate slug if not provided
+      const seoSlug = slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       
-      // Add tags if provided
-      if (req.body.tagIds && Array.isArray(req.body.tagIds)) {
-        await storage.addTagsToPost(post.id, req.body.tagIds);
-      }
+      // Create blog with SEO meta in a transaction
+      const result = await prisma.$transaction(async (tx) => {
+        const blog = await tx.blog.create({
+          data: {
+            title,
+            content,
+            seoSlug,
+            status: status || 'draft',
+            author: author || req.user?.username || 'Admin',
+            featuredImage: featuredImage || '',
+            tags: Array.isArray(tags) ? tags.join(', ') : (tags || ''),
+            categoryId: parseInt(categoryId) || 1,
+            views: 0,
+            createdAt: new Date()
+          }
+        });
+        
+        // Create SEO meta if provided
+        if (seoTitle || seoDescription || seoKeywords) {
+          await tx.seoMeta.create({
+            data: {
+              postId: blog.id,
+              seoTitle: seoTitle || title,
+              seoDescription: seoDescription || excerpt || content.substring(0, 160),
+              seoKeywords: seoKeywords || '',
+              seoSlug
+            }
+          });
+        }
+        
+        return blog;
+      });
       
-      res.status(201).json(post);
+      res.status(201).json({
+        id: result.id.toString(),
+        slug: result.seoSlug,
+        title: result.title,
+        status: result.status
+      });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: fromZodError(error).message });
-      }
       console.error("Error creating post:", error);
       res.status(500).json({ error: "Failed to create post" });
     }
@@ -462,18 +718,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const { id } = req.params;
-      const validatedData = insertPostSchema.partial().parse(req.body);
-      const post = await storage.updatePost(id, validatedData);
+      const { 
+        title, content, slug, excerpt, author, categoryId, 
+        featuredImage, published, status, tags, seoTitle, seoDescription, seoKeywords 
+      } = req.body;
       
-      if (!post) {
-        return res.status(404).json({ error: "Post not found" });
-      }
+      // Update blog and SEO meta in a transaction
+      const result = await prisma.$transaction(async (tx) => {
+        // Build update data dynamically
+        const updateData: any = {};
+        if (title !== undefined) updateData.title = title;
+        if (content !== undefined) updateData.content = content;
+        if (slug !== undefined) updateData.seoSlug = slug;
+        if (author !== undefined) updateData.author = author;
+        if (categoryId !== undefined) updateData.categoryId = parseInt(categoryId);
+        if (featuredImage !== undefined) updateData.featuredImage = featuredImage;
+        if (status !== undefined) updateData.status = status;
+        if (tags !== undefined) updateData.tags = Array.isArray(tags) ? tags.join(', ') : tags;
+        
+        const blog = await tx.blog.update({
+          where: { id: parseInt(id) },
+          data: updateData
+        });
+        
+        // Update or create SEO meta
+        if (seoTitle !== undefined || seoDescription !== undefined || seoKeywords !== undefined) {
+          const existingSeoMeta = await tx.seoMeta.findFirst({
+            where: { postId: parseInt(id) }
+          });
+          
+          const seoData: any = {};
+          if (seoTitle !== undefined) seoData.seoTitle = seoTitle;
+          if (seoDescription !== undefined) seoData.seoDescription = seoDescription;
+          if (seoKeywords !== undefined) seoData.seoKeywords = seoKeywords;
+          if (slug !== undefined) seoData.seoSlug = slug;
+          
+          if (existingSeoMeta) {
+            await tx.seoMeta.update({
+              where: { id: existingSeoMeta.id },
+              data: seoData
+            });
+          } else if (Object.keys(seoData).length > 0) {
+            await tx.seoMeta.create({
+              data: {
+                ...seoData,
+                postId: parseInt(id)
+              }
+            });
+          }
+        }
+        
+        return blog;
+      });
       
-      res.json(post);
+      res.json({
+        id: result.id.toString(),
+        slug: result.seoSlug,
+        title: result.title,
+        status: result.status
+      });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: fromZodError(error).message });
-      }
       console.error("Error updating post:", error);
       res.status(500).json({ error: "Failed to update post" });
     }
@@ -487,14 +791,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const { id } = req.params;
-      const success = await storage.deletePost(id);
       
-      if (!success) {
-        return res.status(404).json({ error: "Post not found" });
-      }
+      // Delete blog (cascade will handle related records)
+      await prisma.blog.delete({
+        where: { id: parseInt(id) }
+      });
       
       res.json({ success: true, message: "Post deleted successfully" });
-    } catch (error) {
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ error: "Post not found" });
+      }
       console.error("Error deleting post:", error);
       res.status(500).json({ error: "Failed to delete post" });
     }
@@ -532,26 +839,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/downloads - Get all downloads with filtering
   app.get("/api/downloads", async (req: Request, res: Response) => {
     try {
-      const pagination = parsePagination(req);
-      const { platform, strategy, minRating, isPremium } = req.query;
+      const { page, limit, sortBy, sortOrder } = parsePagination(req);
       
-      let downloads = await storage.findAllDownloads(pagination);
+      const skip = (page - 1) * limit;
       
-      // Apply filters
-      if (platform) {
-        downloads.data = downloads.data.filter(d => d.platform === platform || d.platform === 'Both');
-      }
-      if (strategy) {
-        downloads.data = downloads.data.filter(d => d.strategy === strategy);
-      }
-      if (minRating) {
-        downloads.data = downloads.data.filter(d => d.rating >= parseFloat(minRating as string));
-      }
-      if (isPremium !== undefined) {
-        downloads.data = downloads.data.filter(d => d.isPremium === (isPremium === 'true'));
-      }
+      // Get signals from database
+      const [signals, total] = await Promise.all([
+        prisma.signal.findMany({
+          skip,
+          take: limit,
+          orderBy: { createdAt: sortOrder }
+        }),
+        prisma.signal.count()
+      ]);
       
-      res.json(downloads);
+      // Format data to match expected download response
+      const formattedData = signals.map(signal => ({
+        id: signal.uuid,
+        name: signal.title,
+        slug: signal.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        description: signal.description,
+        version: '1.0.0',
+        fileUrl: signal.filePath,
+        fileSize: `${(signal.sizeBytes / 1024 / 1024).toFixed(2)} MB`,
+        downloadCount: 0, // Not tracked in signals table
+        rating: 4.5, // Default rating
+        platform: 'Both', // Default to both MT4 and MT5
+        strategy: 'EA', // Default strategy
+        compatibility: 'MT4, MT5',
+        isPremium: false,
+        status: 'active',
+        features: [],
+        requirements: [],
+        screenshots: [],
+        createdAt: signal.createdAt
+      }));
+      
+      res.json({
+        data: formattedData,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit)
+      });
     } catch (error) {
       console.error("Error fetching downloads:", error);
       res.status(500).json({ error: "Failed to fetch downloads" });
@@ -605,20 +934,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/downloads/:id", async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const download = await storage.findDownloadById(id);
       
-      if (!download) {
+      const signal = await prisma.signal.findFirst({
+        where: { 
+          OR: [
+            { uuid: id },
+            { id: parseInt(id) || 0 }
+          ]
+        }
+      });
+      
+      if (!signal) {
         return res.status(404).json({ error: "Download not found" });
       }
       
-      // Increment download view count (not actual download)
-      await storage.trackPageView({
-        eventType: 'pageView',
-        pageUrl: `/downloads/${id}`,
-        downloadId: id
-      });
+      // Format response
+      const formattedDownload = {
+        id: signal.uuid,
+        name: signal.title,
+        slug: signal.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        description: signal.description,
+        version: '1.0.0',
+        fileUrl: signal.filePath,
+        fileSize: `${(signal.sizeBytes / 1024 / 1024).toFixed(2)} MB`,
+        downloadCount: 0,
+        rating: 4.5,
+        platform: 'Both',
+        strategy: 'EA',
+        compatibility: 'MT4, MT5',
+        isPremium: false,
+        status: 'active',
+        features: [],
+        requirements: [],
+        screenshots: [],
+        createdAt: signal.createdAt
+      };
       
-      res.json(download);
+      res.json(formattedDownload);
     } catch (error) {
       console.error("Error fetching download:", error);
       res.status(500).json({ error: "Failed to fetch download" });
@@ -632,13 +984,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Admin access required" });
       }
       
-      const validatedData = insertDownloadSchema.parse(req.body);
-      const download = await storage.createDownload(validatedData);
-      res.status(201).json(download);
+      const { name, description, fileUrl, fileSize } = req.body;
+      
+      const signal = await prisma.signal.create({
+        data: {
+          uuid: crypto.randomBytes(16).toString('hex'),
+          title: name || 'New Signal',
+          description: description || '',
+          filePath: fileUrl || '',
+          mime: 'application/octet-stream',
+          sizeBytes: parseInt(fileSize) || 0,
+          createdAt: new Date()
+        }
+      });
+      
+      res.status(201).json({
+        id: signal.uuid,
+        name: signal.title,
+        description: signal.description
+      });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: fromZodError(error).message });
-      }
       console.error("Error creating download:", error);
       res.status(500).json({ error: "Failed to create download" });
     }
@@ -740,11 +1105,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/categories - Get all categories with hierarchy
   app.get("/api/categories", async (req: Request, res: Response) => {
     try {
-      const { tree } = req.query;
-      const categories = tree === 'true' 
-        ? await storage.getCategoryTree()
-        : await storage.findAllCategories();
-      res.json(categories);
+      const categories = await prisma.category.findMany({
+        orderBy: { name: 'asc' }
+      });
+      
+      // Format response
+      const formattedCategories = categories.map(cat => ({
+        id: cat.categoryId.toString(),
+        name: cat.name,
+        slug: cat.name.toLowerCase().replace(/\s+/g, '-'),
+        description: cat.description || null,
+        parentId: null, // Categories table doesn't have parent relationships
+        order: 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }));
+      
+      res.json(formattedCategories);
     } catch (error) {
       console.error("Error fetching categories:", error);
       res.status(500).json({ error: "Failed to fetch categories" });
@@ -755,13 +1132,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/categories/:slug", async (req: Request, res: Response) => {
     try {
       const { slug } = req.params;
-      const category = await storage.findCategoryBySlug(slug);
+      
+      // Find category by name (using name as slug)
+      const category = await prisma.category.findFirst({
+        where: { 
+          name: slug.replace(/-/g, ' ') // Convert slug back to name
+        }
+      });
       
       if (!category) {
         return res.status(404).json({ error: "Category not found" });
       }
       
-      res.json(category);
+      // Format response
+      const formattedCategory = {
+        id: category.categoryId.toString(),
+        name: category.name,
+        slug: category.name.toLowerCase().replace(/\s+/g, '-'),
+        description: category.description || null,
+        parentId: null, // Categories table doesn't have parent relationships
+        order: 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      res.json(formattedCategory);
     } catch (error) {
       console.error("Error fetching category:", error);
       res.status(500).json({ error: "Failed to fetch category" });
@@ -775,13 +1170,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Admin access required" });
       }
       
-      const validatedData = insertCategorySchema.parse(req.body);
-      const category = await storage.createCategory(validatedData);
-      res.status(201).json(category);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: fromZodError(error).message });
+      const { name, description } = req.body;
+      
+      // Check if category already exists
+      const existingCategory = await prisma.category.findFirst({
+        where: { name }
+      });
+      
+      if (existingCategory) {
+        return res.status(400).json({ error: "Category already exists" });
       }
+      
+      const category = await prisma.category.create({
+        data: {
+          name,
+          description: description || null,
+          status: 'active'
+        }
+      });
+      
+      res.status(201).json({
+        id: category.categoryId.toString(),
+        name: category.name,
+        slug: category.name.toLowerCase().replace(/\s+/g, '-'),
+        description: category.description
+      });
+    } catch (error) {
       console.error("Error creating category:", error);
       res.status(500).json({ error: "Failed to create category" });
     }
@@ -882,13 +1296,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/newsletter/subscribe - Subscribe to newsletter
   app.post("/api/newsletter/subscribe", async (req: Request, res: Response) => {
     try {
-      const validatedData = insertNewsletterSchema.parse(req.body);
-      const subscription = await storage.subscribeNewsletter(validatedData);
+      const { email, name } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      
+      // Check if user already exists
+      const existingUser = await prisma.user.findUnique({
+        where: { email }
+      });
+      
+      if (existingUser) {
+        return res.status(200).json({ success: true, message: "Already subscribed to newsletter" });
+      }
+      
+      // Create new user as subscriber
+      await prisma.user.create({
+        data: {
+          email,
+          name: name || null,
+          password: crypto.randomBytes(32).toString('hex'), // Random password for newsletter-only users
+          role: 'viewer',
+          createdAt: new Date()
+        }
+      });
+      
       res.status(201).json({ success: true, message: "Successfully subscribed to newsletter" });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: fromZodError(error).message });
-      }
       console.error("Error subscribing to newsletter:", error);
       res.status(500).json({ error: "Failed to subscribe" });
     }
@@ -902,9 +1337,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Email is required" });
       }
       
-      const success = await storage.unsubscribeNewsletter(email);
+      // Delete user from users table
+      const result = await prisma.user.deleteMany({
+        where: { email }
+      });
       
-      if (!success) {
+      if (result.count === 0) {
         return res.status(404).json({ error: "Email not found in subscribers list" });
       }
       
@@ -922,9 +1360,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Admin access required" });
       }
       
-      const activeOnly = req.query.active === 'true';
-      const subscribers = await storage.findAllSubscribers(activeOnly);
-      res.json(subscribers);
+      const users = await prisma.user.findMany({
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          createdAt: true,
+          role: true
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      
+      // Format response
+      const formattedSubscribers = users.map(user => ({
+        id: user.id.toString(),
+        email: user.email,
+        name: user.name || '',
+        active: true,
+        preferences: {},
+        subscribedAt: user.createdAt,
+        createdAt: user.createdAt
+      }));
+      
+      res.json(formattedSubscribers);
     } catch (error) {
       console.error("Error fetching subscribers:", error);
       res.status(500).json({ error: "Failed to fetch subscribers" });
@@ -937,9 +1395,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/comments/post/:postId", async (req: Request, res: Response) => {
     try {
       const { postId } = req.params;
-      const onlyApproved = req.query.approved !== 'false';
-      const comments = await storage.findCommentsByPost(postId, onlyApproved);
-      res.json(comments);
+      
+      const comments = await prisma.comment.findMany({
+        where: { postId: parseInt(postId) },
+        orderBy: { createdAt: 'desc' }
+      });
+      
+      // Format response
+      const formattedComments = comments.map(comment => ({
+        id: comment.id.toString(),
+        postId: comment.postId.toString(),
+        name: comment.name,
+        email: comment.email,
+        content: comment.comment,
+        approved: true, // Comments table doesn't have approved field
+        createdAt: comment.createdAt,
+        updatedAt: comment.createdAt
+      }));
+      
+      res.json(formattedComments);
     } catch (error) {
       console.error("Error fetching comments:", error);
       res.status(500).json({ error: "Failed to fetch comments" });
@@ -949,13 +1423,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/comments - Add new comment
   app.post("/api/comments", async (req: Request, res: Response) => {
     try {
-      const validatedData = insertCommentSchema.parse(req.body);
-      const comment = await storage.createComment(validatedData);
-      res.status(201).json(comment);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: fromZodError(error).message });
+      const { postId, name, email, content } = req.body;
+      
+      // Verify blog post exists
+      const blog = await prisma.blog.findUnique({
+        where: { id: parseInt(postId) }
+      });
+      
+      if (!blog) {
+        return res.status(404).json({ error: "Post not found" });
       }
+      
+      const comment = await prisma.comment.create({
+        data: {
+          postId: parseInt(postId),
+          name: name || 'Anonymous',
+          email: email || '',
+          comment: content || '',
+          createdAt: new Date()
+        }
+      });
+      
+      res.status(201).json({
+        id: comment.id.toString(),
+        postId: comment.postId.toString(),
+        name: comment.name,
+        email: comment.email,
+        content: comment.comment,
+        createdAt: comment.createdAt
+      });
+    } catch (error) {
       console.error("Error creating comment:", error);
       res.status(500).json({ error: "Failed to create comment" });
     }
@@ -1008,20 +1505,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/analytics/pageview - Track page view
   app.post("/api/analytics/pageview", async (req: Request, res: Response) => {
     try {
-      const analyticsData = insertAnalyticsSchema.parse({
-        ...req.body,
-        eventType: 'pageView',
-        userAgent: req.headers['user-agent'],
-        ipAddress: req.ip,
-        referrer: req.headers['referer']
-      });
+      const { pageUrl, postId, downloadId } = req.body;
       
-      const analytics = await storage.trackPageView(analyticsData);
+      // If tracking a blog post view, increment the view counter
+      if (postId) {
+        await prisma.blog.update({
+          where: { id: parseInt(postId) },
+          data: { views: { increment: 1 } }
+        });
+      }
+      
+      // Note: The schema doesn't have an analytics table, so we're just tracking views on blogs
+      // For a more complete analytics solution, you'd need an analytics table
+      
       res.status(201).json({ success: true });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: fromZodError(error).message });
-      }
       console.error("Error tracking page view:", error);
       res.status(500).json({ error: "Failed to track page view" });
     }
@@ -1061,18 +1559,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/analytics/popular - Get popular content (admin only)
+  // GET /api/analytics/popular - Get popular content
   app.get("/api/analytics/popular", async (req: Request, res: Response) => {
     try {
-      if (!isAdmin(req)) {
-        return res.status(403).json({ error: "Admin access required" });
-      }
-      
-      const { type = 'pageView' } = req.query;
+      const { type = 'posts' } = req.query;
       const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
       
-      const popular = await storage.getPopularContent(type as string, limit);
-      res.json(popular);
+      const results: any = {};
+      
+      // Get popular posts based on view count
+      if (type === 'posts' || type === 'all') {
+        const popularPosts = await prisma.blog.findMany({
+          where: { status: 'published' },
+          orderBy: { views: 'desc' },
+          take: limit,
+          include: {
+            categories: {
+              include: {
+                category: true
+              }
+            }
+          }
+        });
+        
+        results.posts = popularPosts.map(blog => ({
+          id: blog.id.toString(),
+          title: blog.title,
+          slug: blog.seoSlug,
+          views: blog.views || 0,
+          category: blog.categories[0]?.category?.name || null,
+          featuredImage: blog.featuredImage,
+          createdAt: blog.createdAt
+        }));
+      }
+      
+      // Get signals for downloads (signals table doesn't track views, so just return latest)
+      if (type === 'downloads' || type === 'all') {
+        const signals = await prisma.signal.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: limit
+        });
+        
+        results.downloads = signals.map(signal => ({
+          id: signal.uuid,
+          name: signal.title,
+          slug: signal.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          downloadCount: 0, // Not tracked in signals table
+          description: signal.description,
+          createdAt: signal.createdAt
+        }));
+      }
+      
+      res.json(results);
     } catch (error) {
       console.error("Error fetching popular content:", error);
       res.status(500).json({ error: "Failed to fetch popular content" });
@@ -1095,35 +1633,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Search posts
       if (type === 'all' || type === 'posts') {
-        const posts = await storage.findPublishedPosts({ page: 1, limit: 100 });
-        results.posts = posts.data.filter(p =>
-          p.title.toLowerCase().includes(searchTerm) ||
-          p.content.toLowerCase().includes(searchTerm)
-        ).slice(0, 10);
+        const posts = await prisma.blog.findMany({
+          where: {
+            AND: [
+              { status: 'published' },
+              {
+                OR: [
+                  { title: { contains: searchTerm, mode: 'insensitive' } },
+                  { content: { contains: searchTerm, mode: 'insensitive' } },
+                  { tags: { contains: searchTerm, mode: 'insensitive' } }
+                ]
+              }
+            ]
+          },
+          take: 10,
+          include: {
+            categories: {
+              include: {
+                category: true
+              }
+            }
+          }
+        });
+        
+        results.posts = posts.map(blog => ({
+          id: blog.id.toString(),
+          title: blog.title,
+          slug: blog.seoSlug,
+          excerpt: blog.content.substring(0, 200) + '...',
+          featuredImage: blog.featuredImage,
+          category: blog.categories[0]?.category?.name || null,
+          createdAt: blog.createdAt
+        }));
       }
       
-      // Search downloads
+      // Search downloads (signals table)
       if (type === 'all' || type === 'downloads') {
-        const downloads = await storage.findAllDownloads({ page: 1, limit: 100 });
-        results.downloads = downloads.data.filter(d =>
-          d.name.toLowerCase().includes(searchTerm) ||
-          d.description.toLowerCase().includes(searchTerm)
-        ).slice(0, 10);
+        const signals = await prisma.signal.findMany({
+          where: {
+            OR: [
+              { title: { contains: searchTerm, mode: 'insensitive' } },
+              { description: { contains: searchTerm, mode: 'insensitive' } }
+            ]
+          },
+          take: 10
+        });
+        
+        results.downloads = signals.map(signal => ({
+          id: signal.uuid,
+          name: signal.title,
+          slug: signal.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          description: signal.description,
+          fileUrl: signal.filePath,
+          createdAt: signal.createdAt
+        }));
       }
       
-      // Search pages
-      if (type === 'all' || type === 'pages') {
-        const pages = await storage.findAllPages();
-        results.pages = pages.filter(p =>
-          p.title.toLowerCase().includes(searchTerm) ||
-          p.content.toLowerCase().includes(searchTerm)
-        ).slice(0, 10);
-      }
+      // Note: Pages table doesn't exist in the schema, so skipping page search
+      results.pages = [];
       
       results.total = results.posts.length + results.downloads.length + results.pages.length;
-      
-      // Track search
-      await storage.trackSearch(searchTerm, results.total);
       
       res.json(results);
     } catch (error) {
@@ -1145,28 +1714,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const suggestions: string[] = [];
       
       // Get post titles as suggestions
-      const posts = await storage.findPublishedPosts({ page: 1, limit: 50 });
-      posts.data.forEach(p => {
-        if (p.title.toLowerCase().includes(searchTerm)) {
-          suggestions.push(p.title);
-        }
+      const posts = await prisma.blog.findMany({
+        where: {
+          AND: [
+            { status: 'published' },
+            { title: { contains: searchTerm, mode: 'insensitive' } }
+          ]
+        },
+        select: { title: true },
+        take: 5
       });
+      
+      posts.forEach(p => suggestions.push(p.title));
       
       // Get download names as suggestions
-      const downloads = await storage.findAllDownloads({ page: 1, limit: 50 });
-      downloads.data.forEach(d => {
-        if (d.name.toLowerCase().includes(searchTerm)) {
-          suggestions.push(d.name);
-        }
+      const signals = await prisma.signal.findMany({
+        where: {
+          title: { contains: searchTerm, mode: 'insensitive' }
+        },
+        select: { title: true },
+        take: 5
       });
       
-      // Get popular tags as suggestions
-      const tags = await storage.findPopularTags(20);
-      tags.forEach(t => {
-        if (t.name.toLowerCase().includes(searchTerm)) {
-          suggestions.push(t.name);
-        }
+      signals.forEach(s => suggestions.push(s.title));
+      
+      // Get category names as suggestions
+      const categories = await prisma.category.findMany({
+        where: {
+          name: { contains: searchTerm, mode: 'insensitive' }
+        },
+        select: { name: true },
+        take: 5
       });
+      
+      categories.forEach(c => suggestions.push(c.name));
       
       // Return unique suggestions
       const uniqueSuggestions = Array.from(new Set(suggestions)).slice(0, 10);
@@ -1287,20 +1868,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ==================== CATEGORIES API ====================
-  
-  // GET /api/categories - Get all categories
-  app.get("/api/categories", async (req: Request, res: Response) => {
-    try {
-      const categories = await prisma.category.findMany({
-        orderBy: { name: 'asc' }
-      });
-      res.json(categories);
-    } catch (error) {
-      console.error("Error fetching categories:", error);
-      res.status(500).json({ error: "Failed to fetch categories" });
-    }
-  });
 
   // ==================== ADMIN API ====================
   
