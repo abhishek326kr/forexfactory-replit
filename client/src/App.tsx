@@ -10,11 +10,14 @@ import { AuthProvider, ProtectedRoute } from "@/hooks/useAuth";
 // Import pages
 import Home from "@/pages/Home";
 import Blog from "@/pages/Blog";
+import BlogEnhanced from "@/pages/BlogEnhanced";
 import BlogDetail from "@/pages/BlogDetail";
 import Downloads from "@/pages/Downloads";
+import DownloadsEnhanced from "@/pages/DownloadsEnhanced";
 import SignalDetail from "@/pages/SignalDetail";
 import Category from "@/pages/Category";
 import Search from "@/pages/Search";
+import SearchResults from "@/pages/SearchResults";
 import About from "@/pages/About";
 import Contact from "@/pages/Contact";
 
@@ -39,12 +42,12 @@ function Router() {
     <Switch>
       {/* Main pages */}
       <Route path="/" component={Home} />
-      <Route path="/blog" component={Blog} />
+      <Route path="/blog" component={BlogEnhanced} />
       <Route path="/blog/:slug" component={BlogDetail} />
-      <Route path="/downloads" component={Downloads} />
+      <Route path="/downloads" component={DownloadsEnhanced} />
       <Route path="/download/:id" component={SignalDetail} />
-      <Route path="/category/:category" component={Blog} />
-      <Route path="/search" component={Search} />
+      <Route path="/category/:category" component={BlogEnhanced} />
+      <Route path="/search" component={SearchResults} />
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />
       
