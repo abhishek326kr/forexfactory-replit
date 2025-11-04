@@ -122,10 +122,8 @@ export default function PostEditor() {
       const url = isEditMode ? `/api/admin/blogs/${id}` : '/api/admin/blogs';
       const method = isEditMode ? 'PUT' : 'POST';
       
-      return await apiRequest(url, {
-        method,
-        body: JSON.stringify(data)
-      });
+      const response = await apiRequest(method, url, data);
+      return await response.json();
     },
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/blogs'] });

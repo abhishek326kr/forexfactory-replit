@@ -161,10 +161,7 @@ export default function DownloadManager() {
         : '/api/downloads';
       const method = editingDownload ? 'PUT' : 'POST';
       
-      return await apiRequest(url, {
-        method,
-        body: JSON.stringify(data)
-      });
+      return await apiRequest(method, url, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/downloads'] });
@@ -188,9 +185,7 @@ export default function DownloadManager() {
   // Delete download mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest(`/api/downloads/${id}`, {
-        method: 'DELETE'
-      });
+      return await apiRequest('DELETE', `/api/downloads/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/downloads'] });

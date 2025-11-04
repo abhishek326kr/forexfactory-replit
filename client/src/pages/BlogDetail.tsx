@@ -35,9 +35,7 @@ export default function BlogDetail() {
   // Track view
   const { mutate: trackView } = useMutation({
     mutationFn: async (blogId: string) => {
-      return apiRequest(`/api/blogs/${blogId}/view`, {
-        method: 'POST'
-      });
+      return apiRequest('POST', `/api/blogs/${blogId}/view`);
     },
     onSuccess: () => {
       // Invalidate blog query to update view count

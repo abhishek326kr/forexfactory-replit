@@ -46,10 +46,7 @@ export default function SignalDetail() {
   // Track download
   const { mutate: trackDownload, isPending: isDownloading } = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest(`/api/downloads/${id}/download`, {
-        method: 'POST',
-        body: JSON.stringify({ userId: 'anonymous' })
-      });
+      const response = await apiRequest('POST', `/api/downloads/${id}/download`, { userId: 'anonymous' });
       return response;
     },
     onSuccess: (data) => {
