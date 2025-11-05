@@ -221,9 +221,18 @@ export default function Home() {
                 {posts?.map((post: any) => {
                   // Transform API data to match BlogCard props
                   const stripHtml = (html: string) => {
-                    const tmp = document.createElement('div');
-                    tmp.innerHTML = html || '';
-                    return tmp.textContent || tmp.innerText || '';
+                    // Remove HTML tags using regex - more reliable than DOM manipulation
+                    if (!html) return '';
+                    return html
+                      .replace(/<[^>]*>/g, '') // Remove HTML tags
+                      .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+                      .replace(/&amp;/g, '&') // Replace &amp; with &
+                      .replace(/&lt;/g, '<') // Replace &lt; with <
+                      .replace(/&gt;/g, '>') // Replace &gt; with >
+                      .replace(/&quot;/g, '"') // Replace &quot; with "
+                      .replace(/&#39;/g, "'") // Replace &#39; with '
+                      .replace(/\s+/g, ' ') // Collapse multiple spaces
+                      .trim(); // Trim leading/trailing whitespace
                   };
                   
                   const content = stripHtml(post.content || '');

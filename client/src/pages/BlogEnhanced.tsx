@@ -548,21 +548,41 @@ export default function BlogEnhanced() {
                 ) : postsData?.data?.length > 0 ? (
                   <>
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                      {postsData.data.map((post: any) => (
-                        <BlogCard 
-                          key={post.id} 
-                          id={post.id}
-                          title={post.title || ''}
-                          excerpt={post.content ? post.content.substring(0, 150) + '...' : ''}
-                          category={post.category || 'General'}
-                          author={post.author || 'Admin'}
-                          date={post.createdAt || new Date().toISOString()}
-                          readTime={5}
-                          image={post.featuredImage || '/default-blog-image.jpg'}
-                          slug={post.seoSlug || post.id}
-                          tags={post.tags ? (typeof post.tags === 'string' ? post.tags.split(',') : post.tags) : []}
-                        />
-                      ))}
+                      {postsData.data.map((post: any) => {
+                        // Strip HTML from content to create excerpt
+                        const stripHtml = (html: string) => {
+                          if (!html) return '';
+                          return html
+                            .replace(/<[^>]*>/g, '') // Remove HTML tags
+                            .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+                            .replace(/&amp;/g, '&') // Replace &amp; with &
+                            .replace(/&lt;/g, '<') // Replace &lt; with <
+                            .replace(/&gt;/g, '>') // Replace &gt; with >
+                            .replace(/&quot;/g, '"') // Replace &quot; with "
+                            .replace(/&#39;/g, "'") // Replace &#39; with '
+                            .replace(/\s+/g, ' ') // Collapse multiple spaces
+                            .trim(); // Trim leading/trailing whitespace
+                        };
+                        
+                        const cleanContent = stripHtml(post.content || '');
+                        const excerpt = cleanContent.length > 150 ? cleanContent.substring(0, 150) + '...' : cleanContent;
+                        
+                        return (
+                          <BlogCard 
+                            key={post.id} 
+                            id={post.id}
+                            title={post.title || ''}
+                            excerpt={excerpt}
+                            category={post.category || 'General'}
+                            author={post.author || 'Admin'}
+                            date={post.createdAt || new Date().toISOString()}
+                            readTime={5}
+                            image={post.featuredImage || '/default-blog-image.jpg'}
+                            slug={post.seoSlug || post.id}
+                            tags={post.tags ? (typeof post.tags === 'string' ? post.tags.split(',') : post.tags) : []}
+                          />
+                        );
+                      })}
                     </div>
                     
                     {/* Pagination */}
