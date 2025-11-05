@@ -59,6 +59,43 @@ interface AnalyticsData {
   trends?: any;
 }
 
+// Mock data for charts
+const deviceData = [
+  { name: 'Desktop', value: 60, color: '#0088FE' },
+  { name: 'Mobile', value: 30, color: '#00C49F' },
+  { name: 'Tablet', value: 10, color: '#FFBB28' }
+];
+
+const countryData = [
+  { country: 'United States', users: 1250, percentage: 35 },
+  { country: 'United Kingdom', users: 890, percentage: 25 },
+  { country: 'Germany', users: 640, percentage: 18 },
+  { country: 'France', users: 430, percentage: 12 },
+  { country: 'Canada', users: 350, percentage: 10 }
+];
+
+const downloadsByCategory = [
+  { category: 'Expert Advisors', downloads: 2450, trend: 12 },
+  { category: 'Indicators', downloads: 1870, trend: 8 },
+  { category: 'Scripts', downloads: 920, trend: -3 },
+  { category: 'Libraries', downloads: 340, trend: 15 }
+];
+
+const searchQueries = [
+  { query: 'scalping ea', count: 450 },
+  { query: 'mt5 indicator', count: 380 },
+  { query: 'trend following', count: 290 },
+  { query: 'martingale ea', count: 240 },
+  { query: 'news trading robot', count: 185 }
+];
+
+const engagementMetrics = {
+  avgSessionDuration: '4m 32s',
+  pagesPerSession: 3.8,
+  bounceRate: '42%',
+  returnVisitorRate: '28%'
+};
+
 export default function Analytics() {
   const [dateRange, setDateRange] = useState('7d');
   const [selectedMetric, setSelectedMetric] = useState('pageviews');
