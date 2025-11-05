@@ -37,6 +37,7 @@ import SeoManager from "@/pages/Admin/SeoManager";
 import Analytics from "@/pages/Admin/Analytics";
 import PostEditor from "@/pages/Admin/PostEditor";
 import DownloadManager from "@/pages/Admin/DownloadManager";
+import Settings from "@/pages/Admin/Settings";
 
 function Router() {
   return (
@@ -133,6 +134,13 @@ function Router() {
       <Route path="/admin/seo">
         <ProtectedRoute requireAdmin={true}>
           <SeoManager />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* Settings */}
+      <Route path="/admin/settings">
+        <ProtectedRoute requireAdmin={true}>
+          <Settings />
         </ProtectedRoute>
       </Route>
       
