@@ -79,7 +79,18 @@ export default function SignalList() {
   const itemsPerPage = 10;
 
   // Fetch signals with filters - using actual API endpoint
-  const { data: signalsData, isLoading, error } = useQuery({
+  const { data: signalsData, isLoading, error } = useQuery<{
+    signals: Signal[];
+    total: number;
+    stats?: {
+      total: number;
+      active: number;
+      inactive: number;
+      beta: number;
+      totalDownloads: number;
+      averageRating: number;
+    };
+  }>({
     queryKey: ['/api/admin/signals', { 
       search: searchTerm, 
       platform: platformFilter,
@@ -308,235 +319,214 @@ export default function SignalList() {
         </Card>
       </div>
 
-      {/* Signals List Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Signals & Expert Advisors</CardTitle>
-          <CardDescription>
-            Manage trading signals and automated strategies
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center space-x-3">
-                  <Skeleton className="h-10 w-10 rounded" />
-                  <Skeleton className="h-4 flex-1" />
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-8 w-8" />
-                </div>
-              ))}
-            </div>
-          ) : error ? (
-            <div className="text-center py-8">
+      {/* Signals List - Card View */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Signals & Expert Advisors</h2>
+            <p className="text-muted-foreground">
+              Manage trading signals and automated strategies
+            </p>
+          </div>
+        </div>
+        
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <Card key={i}>
+                <Skeleton className="h-48 w-full" />
+                <CardContent className="pt-4">
+                  <Skeleton className="h-6 w-3/4 mb-2" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full mt-1" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : error ? (
+          <Card>
+            <CardContent className="text-center py-8">
               <Bot className="h-12 w-12 text-destructive mx-auto mb-4" />
               <p className="text-muted-foreground">Failed to load signals</p>
-            </div>
-          ) : signals.length === 0 ? (
-            <div className="text-center py-8">
-              <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No signals found</p>
+            </CardContent>
+          </Card>
+        ) : signals.length === 0 ? (
+          <Card>
+            <CardContent className="text-center py-12">
+              <Package className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No signals found</h3>
+              <p className="text-muted-foreground mb-4">Get started by uploading your first signal</p>
               <Link href="/admin/signals/new">
-                <Button className="mt-4" data-testid="button-create-first-signal">
+                <Button data-testid="button-create-first-signal">
                   <Plus className="h-4 w-4 mr-2" />
-                  Add your first signal
+                  Upload Signal
                 </Button>
               </Link>
-            </div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Platform</TableHead>
-                      <TableHead>Strategy</TableHead>
-                      <TableHead>Version</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Rating</TableHead>
-                      <TableHead>Downloads</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Updated</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {signals.map((signal: Signal) => (
-                      <TableRow key={signal.id} data-testid={`row-signal-${signal.id}`}>
-                        <TableCell>
-                          <div className="font-medium">{signal.name}</div>
-                          <div className="text-xs text-muted-foreground truncate max-w-xs">
-                            {signal.description}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getPlatformBadge(signal.platform)}>
-                            {signal.platform}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {signal.strategyType}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">v{signal.version}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          {signal.isPaid ? (
-                            <div className="flex items-center gap-1">
-                              <DollarSign className="h-3 w-3" />
-                              <span className="font-medium">{signal.price}</span>
-                            </div>
-                          ) : (
-                            <Badge variant="secondary">Free</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
-                            <span className="text-sm">{signal.rating}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Download className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-sm">{signal.downloadCount}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getStatusVariant(signal.status)}>
-                            {signal.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {format(new Date(signal.updatedAt), 'MMM dd')}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                data-testid={`button-actions-${signal.id}`}
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <Link href={`/download/${signal.id}`}>
-                                <DropdownMenuItem>
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  View
-                                </DropdownMenuItem>
-                              </Link>
-                              <Link href={`/admin/signals/edit/${signal.id}`}>
-                                <DropdownMenuItem>
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                              </Link>
-                              <DropdownMenuSeparator />
-                              {signal.status !== 'active' && (
-                                <DropdownMenuItem 
-                                  onClick={() => toggleStatusMutation.mutate({ 
-                                    id: signal.id, 
-                                    status: 'active' 
-                                  })}
-                                >
-                                  <Bot className="h-4 w-4 mr-2" />
-                                  Activate
-                                </DropdownMenuItem>
-                              )}
-                              {signal.status !== 'inactive' && (
-                                <DropdownMenuItem 
-                                  onClick={() => toggleStatusMutation.mutate({ 
-                                    id: signal.id, 
-                                    status: 'inactive' 
-                                  })}
-                                >
-                                  <Bot className="h-4 w-4 mr-2" />
-                                  Deactivate
-                                </DropdownMenuItem>
-                              )}
-                              {signal.status !== 'beta' && (
-                                <DropdownMenuItem 
-                                  onClick={() => toggleStatusMutation.mutate({ 
-                                    id: signal.id, 
-                                    status: 'beta' 
-                                  })}
-                                >
-                                  <TrendingUp className="h-4 w-4 mr-2" />
-                                  Set as Beta
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                className="text-destructive"
-                                onClick={() => setDeleteId(signal.id)}
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-6">
-                  <p className="text-sm text-muted-foreground">
-                    Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
-                    {Math.min(currentPage * itemsPerPage, signalsData?.total || 0)} of{' '}
-                    {signalsData?.total || 0} signals
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={currentPage === 1}
-                      onClick={() => setCurrentPage(currentPage - 1)}
-                      data-testid="button-prev-page"
-                    >
-                      Previous
-                    </Button>
-                    {[...Array(Math.min(totalPages, 5))].map((_, i) => {
-                      const page = i + 1;
-                      return (
-                        <Button
-                          key={page}
-                          variant={currentPage === page ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setCurrentPage(page)}
-                          data-testid={`button-page-${page}`}
-                        >
-                          {page}
-                        </Button>
-                      );
-                    })}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={currentPage === totalPages}
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                      data-testid="button-next-page"
-                    >
-                      Next
-                    </Button>
-                  </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {signals.map((signal: Signal) => (
+              <Card key={signal.id} className="overflow-hidden hover:shadow-lg transition-shadow" data-testid={`card-signal-${signal.id}`}>
+                {/* Screenshot */}
+                <div className="aspect-video bg-muted relative">
+                  {signal.previewImage ? (
+                    <img 
+                      src={signal.previewImage} 
+                      alt={signal.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.onerror = null;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        if (parent) {
+                          parent.innerHTML = '<div class="flex items-center justify-center h-full"><svg class="h-12 w-12 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>';
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <Bot className="h-12 w-12 text-muted-foreground" />
+                    </div>
+                  )}
                 </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+
+                <CardContent className="pt-4">
+                  {/* Title */}
+                  <h3 className="font-semibold text-lg mb-2 line-clamp-1">
+                    {signal.name}
+                  </h3>
+                  
+                  {/* Description */}
+                  <p className="text-sm text-muted-foreground line-clamp-3 mb-4">
+                    {signal.description}
+                  </p>
+
+                  {/* Action Buttons */}
+                  <div className="flex justify-between items-center pt-3 border-t">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          data-testid={`button-actions-${signal.id}`}
+                        >
+                          Actions
+                          <MoreVertical className="h-4 w-4 ml-2" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <Link href={`/download/${signal.id}`}>
+                          <DropdownMenuItem>
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </DropdownMenuItem>
+                        </Link>
+                        <Link href={`/admin/signals/edit/${signal.id}`}>
+                          <DropdownMenuItem>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit Signal
+                          </DropdownMenuItem>
+                        </Link>
+                        <DropdownMenuSeparator />
+                        {signal.status !== 'active' && (
+                          <DropdownMenuItem 
+                            onClick={() => toggleStatusMutation.mutate({ 
+                              id: signal.id, 
+                              status: 'active' 
+                            })}
+                          >
+                            <Bot className="h-4 w-4 mr-2" />
+                            Activate
+                          </DropdownMenuItem>
+                        )}
+                        {signal.status !== 'inactive' && (
+                          <DropdownMenuItem 
+                            onClick={() => toggleStatusMutation.mutate({ 
+                              id: signal.id, 
+                              status: 'inactive' 
+                            })}
+                          >
+                            <Bot className="h-4 w-4 mr-2" />
+                            Deactivate
+                          </DropdownMenuItem>
+                        )}
+                        {signal.status !== 'beta' && (
+                          <DropdownMenuItem 
+                            onClick={() => toggleStatusMutation.mutate({ 
+                              id: signal.id, 
+                              status: 'beta' 
+                            })}
+                          >
+                            <TrendingUp className="h-4 w-4 mr-2" />
+                            Set as Beta
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          className="text-destructive"
+                          onClick={() => setDeleteId(signal.id)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-6">
+            <p className="text-sm text-muted-foreground">
+              Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
+              {Math.min(currentPage * itemsPerPage, signalsData?.total || 0)} of{' '}
+              {signalsData?.total || 0} signals
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(currentPage - 1)}
+                data-testid="button-prev-page"
+              >
+                Previous
+              </Button>
+              {[...Array(Math.min(totalPages, 5))].map((_, i) => {
+                const page = i + 1;
+                return (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setCurrentPage(page)}
+                    data-testid={`button-page-${page}`}
+                  >
+                    {page}
+                  </Button>
+                );
+              })}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(currentPage + 1)}
+                data-testid="button-next-page"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>

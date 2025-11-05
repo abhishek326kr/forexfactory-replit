@@ -76,15 +76,9 @@ export default function SignalUploader() {
         const base64 = reader.result as string;
         
         // Create signal with auto-generated fields
-        const response = await apiRequest("/api/admin/signals/simple", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            screenshot: base64,
-            description: description
-          })
+        const response = await apiRequest("POST", "/api/admin/signals/simple", {
+          screenshot: base64,
+          description: description
         });
 
         toast({
@@ -212,7 +206,21 @@ export default function SignalUploader() {
               recentSignals.map((signal: any) => (
                 <Card key={signal.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                   <div className="aspect-video bg-muted relative">
-                    {signal.file_path ? (
+                    {signal.screenshots ? (
+                      <img 
+                        src={JSON.parse(signal.screenshots)[0] || signal.file_path} 
+                        alt={signal.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          if (signal.file_path) {
+                            target.src = signal.file_path;
+                          } else {
+                            target.style.display = 'none';
+                          }
+                        }}
+                      />
+                    ) : signal.file_path ? (
                       <img 
                         src={signal.file_path} 
                         alt={signal.title}
@@ -225,9 +233,9 @@ export default function SignalUploader() {
                     )}
                   </div>
                   <CardContent className="p-4">
-                    <h3 className="font-medium truncate">{signal.title}</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {new Date(signal.created_at).toLocaleDateString()}
+                    <h3 className="font-semibold text-base mb-1 line-clamp-1">{signal.title}</h3>
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {signal.description}
                     </p>
                   </CardContent>
                 </Card>
