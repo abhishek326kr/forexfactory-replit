@@ -13,7 +13,7 @@ const globalForPrisma = globalThis as unknown as {
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  datasourceUrl: process.env.MYSQL_DATABASE_URL,
+  datasourceUrl: process.env.DATABASE_URL,
 });
 
 if (process.env.NODE_ENV !== 'production') {
@@ -44,7 +44,7 @@ export async function connectDB(maxRetries = 5): Promise<boolean> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`🔄 Database connection attempt ${attempt}/${maxRetries}...`);
-      console.log('📊 Database URL:', process.env.MYSQL_DATABASE_URL ? 'Set (hidden for security)' : 'Not set');
+      console.log('📊 Database URL:', process.env.DATABASE_URL ? 'Set (hidden for security)' : 'Not set');
       
       // Test the connection
       await prisma.$connect();
@@ -89,7 +89,7 @@ export async function connectDB(maxRetries = 5): Promise<boolean> {
   
   if (lastError?.message?.includes("Can't reach database server")) {
     console.error('  💡 Check if the database server is running and accessible');
-    console.error('  💡 Verify the MYSQL_DATABASE_URL environment variable');
+    console.error('  💡 Verify the DATABASE_URL environment variable');
     console.error('  💡 Ensure @ symbols are encoded as %40 in the password');
   }
   

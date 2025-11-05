@@ -378,10 +378,7 @@ export type SeoMeta = typeof seoMeta.$inferSelect;
 // Signal schemas (Expert Advisors)
 export const insertSignalSchema = createInsertSchema(signals).omit({
   id: true,
-  createdAt: true,
-  downloadCount: true,
-  rating: true,
-  status: true
+  createdAt: true
 }).extend({
   uuid: z.string().length(32, "UUID must be 32 characters"),
   title: z.string().min(1, "Title is required").max(255),
