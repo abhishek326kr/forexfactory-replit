@@ -1010,6 +1010,32 @@ export class PrismaStorage implements IStorage {
   }
 
   // ============================================
+  // TAGS MANAGEMENT
+  // ============================================
+  async findAllTags(): Promise<string[]> {
+    try {
+      const blogs = await prisma.blog.findMany({
+        select: { tags: true },
+        where: { status: 'published' }
+      });
+      
+      // Extract unique tags from all blogs
+      const allTags = new Set<string>();
+      blogs.forEach(blog => {
+        if (blog.tags && typeof blog.tags === 'string' && blog.tags.trim()) {
+          const tags = blog.tags.split(',').map(t => t.trim()).filter(t => t);
+          tags.forEach(tag => allTags.add(tag));
+        }
+      });
+      
+      return Array.from(allTags).sort();
+    } catch (error) {
+      handlePrismaError(error);
+      return [];
+    }
+  }
+
+  // ============================================
   // COMMENT MANAGEMENT
   // ============================================
   async createComment(insertComment: InsertComment): Promise<Comment> {

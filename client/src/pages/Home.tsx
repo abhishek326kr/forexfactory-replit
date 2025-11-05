@@ -218,13 +218,50 @@ export default function Home() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-                {posts?.map((post: any) => (
-                  <BlogCard 
-                    key={post.id} 
-                    {...post}
-                    tags={typeof post.tags === 'string' ? post.tags.split(',').map((t: string) => t.trim()) : post.tags || []}
-                  />
-                ))}
+                {posts?.map((post: any) => {
+                  // Transform API data to match BlogCard props
+                  const stripHtml = (html: string) => {
+                    const tmp = document.createElement('div');
+                    tmp.innerHTML = html || '';
+                    return tmp.textContent || tmp.innerText || '';
+                  };
+                  
+                  const content = stripHtml(post.content || '');
+                  const excerpt = content.length > 150 ? content.substring(0, 150) + '...' : content;
+                  const wordsPerMinute = 200;
+                  const wordCount = content.split(/\s+/).length;
+                  const readTime = Math.ceil(wordCount / wordsPerMinute);
+                  
+                  const formatDate = (dateStr: string) => {
+                    try {
+                      const date = new Date(dateStr);
+                      return date.toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        year: 'numeric' 
+                      });
+                    } catch {
+                      return 'Recent';
+                    }
+                  };
+                  
+                  const transformedPost = {
+                    id: String(post.id),
+                    title: post.title || 'Untitled',
+                    excerpt: excerpt || 'No preview available',
+                    category: post.category || 'General', // Use category name if available, otherwise default
+                    author: post.author || 'Admin',
+                    date: formatDate(post.createdAt),
+                    readTime: readTime || 5,
+                    image: post.featuredImage || post.image || '/placeholder.jpg',
+                    slug: post.seoSlug || post.slug || String(post.id),
+                    tags: typeof post.tags === 'string' && post.tags 
+                      ? post.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+                      : post.tags || []
+                  };
+                  
+                  return <BlogCard key={transformedPost.id} {...transformedPost} />;
+                })}
               </div>
             )}
           </div>
