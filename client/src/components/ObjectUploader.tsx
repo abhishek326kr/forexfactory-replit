@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import Uppy from "@uppy/core";
-import { Dashboard } from "@uppy/react";
+import Dashboard from "@uppy/dashboard";
+// CSS imports are handled differently - Dashboard will use minimal styling
 import AwsS3 from "@uppy/aws-s3";
 import type { UploadResult } from "@uppy/core";
 import { Button } from "@/components/ui/button";
