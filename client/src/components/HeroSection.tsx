@@ -48,24 +48,20 @@ export default function HeroSection() {
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4">
             <Link href="/downloads">
-              <a>
-                <Button size="lg" className="w-full sm:w-auto" data-testid="button-browse-eas">
-                  <Download className="mr-2 h-4 w-4" />
-                  Browse Free EAs
-                </Button>
-              </a>
+              <Button size="lg" className="w-full sm:w-auto" data-testid="button-browse-eas">
+                <Download className="mr-2 h-4 w-4" />
+                Browse Free EAs
+              </Button>
             </Link>
             <Link href="/blog">
-              <a>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="w-full sm:w-auto backdrop-blur-sm bg-background/30"
-                  data-testid="button-latest-posts"
-                >
-                  Latest Trading Insights
-                </Button>
-              </a>
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full sm:w-auto backdrop-blur-sm bg-background/30"
+                data-testid="button-latest-posts"
+              >
+                Latest Trading Insights
+              </Button>
             </Link>
           </div>
 
