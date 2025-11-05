@@ -2249,7 +2249,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalViews,
         totalUsers,
         totalComments,
-        totalCategories
+        totalCategories,
+        totalSignals,
+        activeSignals,
+        totalSignalDownloads
       ] = await Promise.all([
         prisma.blog.count(),
         prisma.blog.count({ where: { status: 'published' } }),
@@ -2257,7 +2260,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         prisma.blog.aggregate({ _sum: { views: true } }),
         prisma.user.count(),
         prisma.comment.count(),
-        prisma.category.count()
+        prisma.category.count(),
+        prisma.signal.count(),
+        prisma.signal.count({ where: { isActive: true } }),
+        prisma.signal.aggregate({ _sum: { downloadCount: true } })
       ]);
 
       const stats = {
@@ -2265,6 +2271,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           total: totalBlogs,
           published: publishedBlogs,
           draft: draftBlogs
+        },
+        signals: {
+          total: totalSignals,
+          active: activeSignals,
+          inactive: totalSignals - activeSignals
         },
         analytics: {
           totalViews: totalViews._sum.views || 0,
@@ -2278,13 +2289,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           new: Math.floor(totalUsers * 0.05) // Estimated new users
         },
         downloads: {
-          total: 0, // No downloads table in current schema
-          today: 0,
-          week: 0
+          total: totalSignalDownloads._sum.downloadCount || 0,
+          today: 0, // Would need date tracking to calculate
+          week: 0 // Would need date tracking to calculate
         },
         comments: {
           total: totalComments,
-          pending: 0
+          pending: 0 // All comments are approved by default in current schema
         },
         categories: {
           total: totalCategories
@@ -2523,6 +2534,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating blog:", error);
       res.status(500).json({ error: "Failed to update blog" });
+    }
+  });
+
+  // GET /api/admin/recent-activity - Get recent activity (admin only)
+  app.get("/api/admin/recent-activity", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      
+      // Fetch recent items from different tables
+      const [recentBlogs, recentSignals, recentComments] = await Promise.all([
+        // Recent blogs
+        prisma.blog.findMany({
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            title: true,
+            seoSlug: true,
+            status: true,
+            createdAt: true,
+            author: true
+          }
+        }),
+        // Recent signals
+        prisma.signal.findMany({
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            name: true,
+            platform: true,
+            strategy: true,
+            createdAt: true
+          }
+        }),
+        // Recent comments
+        prisma.comment.findMany({
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            blog: {
+              select: {
+                title: true,
+                seoSlug: true
+              }
+            }
+          }
+        })
+      ]);
+
+      const activity = {
+        recentPosts: recentBlogs.map(blog => ({
+          id: blog.id,
+          title: blog.title,
+          slug: blog.seoSlug,
+          status: blog.status,
+          author: blog.author,
+          createdAt: blog.createdAt,
+          type: 'post'
+        })),
+        recentSignals: recentSignals.map(signal => ({
+          id: signal.id,
+          name: signal.name,
+          platform: signal.platform,
+          strategy: signal.strategy,
+          createdAt: signal.createdAt,
+          type: 'signal'
+        })),
+        recentComments: recentComments.map(comment => ({
+          id: comment.id,
+          name: comment.name,
+          email: comment.email,
+          comment: comment.comment.substring(0, 100) + (comment.comment.length > 100 ? '...' : ''),
+          postTitle: comment.blog?.title || 'Unknown Post',
+          postSlug: comment.blog?.seoSlug || '',
+          createdAt: comment.createdAt,
+          type: 'comment'
+        })),
+        // Combine all activity and sort by date
+        allActivity: [
+          ...recentBlogs.map(b => ({ ...b, type: 'blog' as const, displayName: b.title })),
+          ...recentSignals.map(s => ({ ...s, type: 'signal' as const, displayName: s.name })),
+          ...recentComments.map(c => ({ ...c, type: 'comment' as const, displayName: `Comment by ${c.name}` }))
+        ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, limit)
+      };
+
+      res.json(activity);
+    } catch (error) {
+      console.error("Error fetching recent activity:", error);
+      res.status(500).json({ error: "Failed to fetch recent activity" });
     }
   });
 
@@ -2789,6 +2890,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== SIGNAL/EA ENDPOINTS ====================
+  
+  // GET /api/admin/signals - List all signals for admin (admin only)
+  app.get("/api/admin/signals", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { page, limit, sortBy, sortOrder } = parsePagination(req);
+      const { platform, strategy, status, search } = req.query;
+      
+      const filters: SignalFilters = {};
+      if (platform && platform !== 'all') filters.platform = platform as SignalPlatform;
+      if (strategy && strategy !== 'all') filters.strategy = strategy as SignalStrategy;
+      if (search) filters.search = search as string;
+      
+      const result = await storage.getAllSignals({ page, limit, sortBy, sortOrder }, filters);
+      
+      // Transform data to match admin UI expectations
+      const transformedSignals = result.data.map(signal => ({
+        ...signal,
+        status: signal.isActive ? 'active' : 'inactive',
+        strategyType: signal.strategy || 'General',
+        isPaid: signal.price && signal.price > 0,
+        author: signal.authorId ? 'Admin' : 'System'
+      }));
+      
+      res.json({
+        signals: transformedSignals,
+        total: result.total,
+        page: result.page,
+        totalPages: result.totalPages
+      });
+    } catch (error: any) {
+      console.error("Error fetching admin signals:", error);
+      res.status(500).json({ error: "Failed to fetch signals", message: error.message });
+    }
+  });
   
   // GET /api/signals - List all signals with filters
   app.get("/api/signals", async (req: Request, res: Response) => {

@@ -41,86 +41,42 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 
-// Mock data - replace with actual API calls
-const pageViewsData = [
-  { date: 'Jan 1', views: 4500, uniqueVisitors: 2300 },
-  { date: 'Jan 2', views: 5200, uniqueVisitors: 2800 },
-  { date: 'Jan 3', views: 4800, uniqueVisitors: 2500 },
-  { date: 'Jan 4', views: 6100, uniqueVisitors: 3200 },
-  { date: 'Jan 5', views: 5900, uniqueVisitors: 3100 },
-  { date: 'Jan 6', views: 7200, uniqueVisitors: 3800 },
-  { date: 'Jan 7', views: 6800, uniqueVisitors: 3500 }
-];
-
-const downloadsByCategory = [
-  { category: 'Expert Advisors', downloads: 3450, percentage: 45 },
-  { category: 'Indicators', downloads: 2100, percentage: 27 },
-  { category: 'Scripts', downloads: 1200, percentage: 16 },
-  { category: 'Libraries', downloads: 950, percentage: 12 }
-];
-
-const topPages = [
-  { page: '/downloads/grid-trading-ea', views: 12450, bounceRate: 23 },
-  { page: '/blog/forex-trading-strategies', views: 10230, bounceRate: 35 },
-  { page: '/downloads/scalping-bot', views: 8900, bounceRate: 28 },
-  { page: '/blog/mt5-vs-mt4-comparison', views: 7650, bounceRate: 42 },
-  { page: '/downloads/support-resistance', views: 6320, bounceRate: 31 }
-];
-
-const searchQueries = [
-  { query: 'grid trading ea', count: 2345, trend: 'up' },
-  { query: 'mt5 expert advisor', count: 1890, trend: 'up' },
-  { query: 'scalping indicator', count: 1567, trend: 'down' },
-  { query: 'forex robot', count: 1234, trend: 'stable' },
-  { query: 'free ea download', count: 987, trend: 'up' }
-];
-
-const deviceData = [
-  { name: 'Desktop', value: 65, color: '#0088FE' },
-  { name: 'Mobile', value: 30, color: '#00C49F' },
-  { name: 'Tablet', value: 5, color: '#FFBB28' }
-];
-
-const countryData = [
-  { country: 'United States', users: 3456, percentage: 28 },
-  { country: 'United Kingdom', users: 2134, percentage: 17 },
-  { country: 'Germany', users: 1890, percentage: 15 },
-  { country: 'Canada', users: 1234, percentage: 10 },
-  { country: 'Australia', users: 987, percentage: 8 }
-];
-
-const engagementMetrics = {
-  avgSessionDuration: '4:32',
-  pagesPerSession: 3.8,
-  bounceRate: 32.5,
-  returnVisitorRate: 45.2
-};
+interface AnalyticsData {
+  period: string;
+  metrics: {
+    pageViews?: number;
+    uniqueVisitors?: number;
+    avgSessionDuration?: string;
+    bounceRate?: string;
+    totalPosts?: number;
+    totalSignals?: number;
+    pendingComments?: number;
+    publishedPosts?: number;
+    totalDownloads?: number;
+    avgRating?: number;
+    commentsPerPost?: number;
+  };
+  trends?: any;
+}
 
 export default function Analytics() {
-  const [dateRange, setDateRange] = useState('7days');
+  const [dateRange, setDateRange] = useState('7d');
   const [selectedMetric, setSelectedMetric] = useState('pageviews');
 
-  // Fetch analytics data
-  const { data: analytics, isLoading } = useQuery({
-    queryKey: ['/api/analytics', dateRange],
-    queryFn: async () => {
-      // Mock data - replace with actual API call
-      return {
-        pageViews: pageViewsData,
-        downloads: downloadsByCategory,
-        topPages,
-        searchQueries,
-        devices: deviceData,
-        countries: countryData,
-        engagement: engagementMetrics,
-        summary: {
-          totalPageViews: 42500,
-          uniqueVisitors: 18900,
-          totalDownloads: 7700,
-          avgLoadTime: 1.8
-        }
-      };
+  // Map date range to API period parameter
+  const getPeriod = (range: string) => {
+    switch(range) {
+      case '24hours': return '24h';
+      case '7days': return '7d';
+      case '30days': return '30d';
+      case '90days': return '90d';
+      default: return '7d';
     }
+  };
+
+  // Fetch analytics data from real API
+  const { data: analytics, isLoading } = useQuery<AnalyticsData>({
+    queryKey: ['/api/admin/analytics', { period: getPeriod(dateRange), metrics: 'all' }]
   });
 
   const StatCard = ({ 
@@ -193,27 +149,27 @@ export default function Analytics() {
           <>
             <StatCard
               title="Page Views"
-              value={analytics?.summary.totalPageViews.toLocaleString() || '0'}
-              change={12.5}
+              value={analytics?.metrics?.pageViews?.toLocaleString() || '0'}
+              change={0}
               icon={Eye}
             />
             <StatCard
               title="Unique Visitors"
-              value={analytics?.summary.uniqueVisitors.toLocaleString() || '0'}
-              change={8.2}
+              value={analytics?.metrics?.uniqueVisitors?.toLocaleString() || '0'}
+              change={0}
               icon={Users}
             />
             <StatCard
               title="Total Downloads"
-              value={analytics?.summary.totalDownloads.toLocaleString() || '0'}
-              change={15.7}
+              value={analytics?.metrics?.totalDownloads?.toLocaleString() || '0'}
+              change={0}
               icon={Download}
             />
             <StatCard
-              title="Avg Load Time"
-              value={`${analytics?.summary.avgLoadTime || '0'}s`}
-              change={-5.3}
-              icon={Activity}
+              title="Total Posts"
+              value={analytics?.metrics?.totalPosts?.toLocaleString() || '0'}
+              change={0}
+              icon={FileText}
             />
           </>
         )}
@@ -236,31 +192,25 @@ export default function Analytics() {
               <CardDescription>Traffic overview for the selected period</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={350}>
-                <AreaChart data={pageViewsData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Area
-                    type="monotone"
-                    dataKey="views"
-                    stackId="1"
-                    stroke="#8884d8"
-                    fill="#8884d8"
-                    name="Page Views"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="uniqueVisitors"
-                    stackId="1"
-                    stroke="#82ca9d"
-                    fill="#82ca9d"
-                    name="Unique Visitors"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              {analytics?.metrics?.pageViews ? (
+                <ResponsiveContainer width="100%" height={350}>
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <Eye className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">Analytics data is being collected</p>
+                      <p className="text-sm text-muted-foreground">Check back later for traffic insights</p>
+                    </div>
+                  </div>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[350px]">
+                  <div className="text-center">
+                    <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No analytics data yet</p>
+                    <p className="text-sm text-muted-foreground">Data will appear as your site gets traffic</p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -272,18 +222,12 @@ export default function Analytics() {
                 <CardDescription>Most visited pages</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {topPages.map((page, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{page.page}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {page.views.toLocaleString()} views • {page.bounceRate}% bounce rate
-                        </p>
-                      </div>
-                      <Badge variant="outline">{index + 1}</Badge>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">No page analytics yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">Data will appear as pages are viewed</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

@@ -78,7 +78,7 @@ export default function SignalList() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const itemsPerPage = 10;
 
-  // Fetch signals with filters
+  // Fetch signals with filters - using actual API endpoint
   const { data: signalsData, isLoading, error } = useQuery({
     queryKey: ['/api/admin/signals', { 
       search: searchTerm, 
@@ -87,89 +87,7 @@ export default function SignalList() {
       status: statusFilter,
       page: currentPage, 
       limit: itemsPerPage 
-    }],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        ...(searchTerm && { search: searchTerm }),
-        ...(platformFilter !== 'all' && { platform: platformFilter }),
-        ...(strategyFilter !== 'all' && { strategy: strategyFilter }),
-        ...(statusFilter !== 'all' && { status: statusFilter }),
-        page: currentPage.toString(),
-        limit: itemsPerPage.toString()
-      });
-      
-      // Mock data for now - replace with actual API call
-      return {
-        signals: [
-          {
-            id: '1',
-            name: 'Grid Trading EA Pro',
-            description: 'Advanced grid trading expert advisor with AI-powered risk management',
-            version: '2.5.0',
-            platform: 'Both' as const,
-            strategyType: 'Grid Trading',
-            status: 'active' as const,
-            fileUrl: '/downloads/grid-ea-pro.zip',
-            previewImage: '/images/grid-ea-preview.jpg',
-            features: ['Auto lot sizing', 'News filter', 'Multi-pair support'],
-            requirements: ['MT4/MT5 build 1350+', 'VPS recommended', 'Min balance $1000'],
-            installInstructions: 'Copy to Experts folder and enable auto trading',
-            price: 0,
-            isPaid: false,
-            rating: 4.8,
-            downloadCount: 3456,
-            createdAt: '2024-01-15T10:00:00Z',
-            updatedAt: '2024-02-01T14:30:00Z',
-            author: 'Admin'
-          },
-          {
-            id: '2',
-            name: 'Scalping Bot Ultra',
-            description: 'High-frequency scalping EA optimized for low spreads',
-            version: '1.2.0',
-            platform: 'MT5' as const,
-            strategyType: 'Scalping',
-            status: 'active' as const,
-            price: 99.99,
-            isPaid: true,
-            rating: 4.5,
-            downloadCount: 2134,
-            createdAt: '2024-01-20T12:00:00Z',
-            updatedAt: '2024-02-05T09:15:00Z',
-            author: 'Admin',
-            features: ['1-5 pip targets', 'Spread filter', 'Session control'],
-            requirements: ['Low spread broker', 'Fast execution', 'Min balance $500']
-          },
-          {
-            id: '3',
-            name: 'Trend Following System',
-            description: 'Momentum-based trend following strategy',
-            version: '3.0.1',
-            platform: 'MT4' as const,
-            strategyType: 'Trend Following',
-            status: 'beta' as const,
-            price: 0,
-            isPaid: false,
-            rating: 4.2,
-            downloadCount: 987,
-            createdAt: '2024-02-01T08:00:00Z',
-            updatedAt: '2024-02-10T16:45:00Z',
-            author: 'Admin',
-            features: ['Multiple timeframe analysis', 'Dynamic stop loss', 'Trail profit'],
-            requirements: ['MT4 build 1090+', 'Trending market conditions']
-          }
-        ],
-        total: 3,
-        stats: {
-          total: 3,
-          active: 2,
-          inactive: 0,
-          beta: 1,
-          totalDownloads: 6577,
-          averageRating: 4.5
-        }
-      };
-    }
+    }]
   });
 
   // Delete signal mutation

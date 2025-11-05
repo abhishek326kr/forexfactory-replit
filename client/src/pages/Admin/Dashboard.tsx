@@ -30,18 +30,27 @@ import {
   MousePointerClick,
   Target,
   BarChart3,
-  Clock
+  Clock,
+  Download
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { format } from 'date-fns';
 
 interface StatsData {
   posts: { total: number; published: number; draft: number };
+  signals: { total: number; active: number; inactive: number };
   downloads: { total: number; today: number; week: number };
   users: { total: number; active: number; new: number };
   analytics: { pageViews: number; totalViews: number; uniqueVisitors: number; avgSessionDuration: string };
   comments: { total: number; pending: number };
   categories: { total: number };
+}
+
+interface RecentActivity {
+  recentPosts: Array<{ id: number; title: string; slug: string; status: string; author: string; createdAt: string; type: string }>;
+  recentSignals: Array<{ id: number; name: string; platform: string; strategy: string; createdAt: string; type: string }>;
+  recentComments: Array<{ id: number; name: string; email: string; comment: string; postTitle: string; postSlug: string; createdAt: string; type: string }>;
+  allActivity: Array<{ id: number; createdAt: string; type: string; displayName: string; [key: string]: any }>;
 }
 
 interface SeoPerformance {
@@ -79,6 +88,11 @@ export default function AdminDashboard() {
   // Fetch recent blogs
   const { data: recentBlogs, isLoading: blogsLoading } = useQuery<{ data: BlogData[] }>({
     queryKey: ['/api/admin/blogs', { limit: 5, sortBy: 'createdAt', sortOrder: 'desc' }]
+  });
+
+  // Fetch recent activity
+  const { data: recentActivity, isLoading: activityLoading } = useQuery<RecentActivity>({
+    queryKey: ['/api/admin/recent-activity', { limit: 10 }]
   });
 
   const StatCard = ({ 
@@ -198,24 +212,28 @@ export default function AdminDashboard() {
         <StatCard
           title="Total Blogs"
           value={stats?.posts.total || 0}
+          description={`${stats?.posts.published || 0} published, ${stats?.posts.draft || 0} drafts`}
           icon={FileText}
           loading={statsLoading}
         />
         <StatCard
-          title="Published"
-          value={stats?.posts.published || 0}
-          icon={CheckCircle}
+          title="Total Signals"
+          value={stats?.signals?.total || 0}
+          description={`${stats?.signals?.active || 0} active, ${stats?.signals?.inactive || 0} inactive`}
+          icon={Activity}
           loading={statsLoading}
         />
         <StatCard
-          title="Drafts"
-          value={stats?.posts.draft || 0}
-          icon={Edit}
+          title="Downloads"
+          value={stats?.downloads?.total?.toLocaleString() || 0}
+          description="Total downloads"
+          icon={Download}
           loading={statsLoading}
         />
         <StatCard
           title="Total Views"
           value={stats?.analytics.totalViews?.toLocaleString() || 0}
+          description="All-time page views"
           icon={Eye}
           loading={statsLoading}
         />

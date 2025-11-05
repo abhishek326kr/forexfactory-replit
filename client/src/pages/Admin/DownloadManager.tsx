@@ -98,60 +98,31 @@ export default function DownloadManager() {
     }
   });
 
-  // Fetch downloads
-  const { data: downloads, isLoading } = useQuery<DownloadItem[]>({
-    queryKey: ['/api/downloads'],
-    queryFn: async () => {
-      // Mock data - replace with actual API call
-      return [
-        {
-          id: '1',
-          title: 'Grid Trading EA Pro',
-          description: 'Advanced grid trading Expert Advisor with smart money management',
-          version: '2.5.0',
-          platform: 'MT5',
-          category: 'Expert Advisor',
-          fileUrl: 'https://example.com/downloads/grid-ea.ex5',
-          downloadSize: '2.3 MB',
-          downloadCount: 1234,
-          featured: true,
-          price: 99,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        {
-          id: '2',
-          title: 'Support & Resistance Indicator',
-          description: 'Automatically identifies key support and resistance levels',
-          version: '1.2.0',
-          platform: 'Both',
-          category: 'Indicator',
-          fileUrl: 'https://example.com/downloads/sr-indicator.ex4',
-          downloadSize: '450 KB',
-          downloadCount: 567,
-          featured: false,
-          price: 0,
-          createdAt: new Date(Date.now() - 86400000),
-          updatedAt: new Date(Date.now() - 86400000)
-        },
-        {
-          id: '3',
-          title: 'Scalping Bot Ultra',
-          description: 'High-frequency scalping Expert Advisor for volatile markets',
-          version: '3.0.1',
-          platform: 'MT4',
-          category: 'Expert Advisor',
-          fileUrl: 'https://example.com/downloads/scalping-bot.ex4',
-          downloadSize: '1.8 MB',
-          downloadCount: 890,
-          featured: true,
-          price: 149,
-          createdAt: new Date(Date.now() - 172800000),
-          updatedAt: new Date(Date.now() - 172800000)
-        }
-      ];
-    }
+  // Fetch real signals from database
+  const { data: signalsData, isLoading } = useQuery({
+    queryKey: ['/api/admin/signals', { 
+      search: searchTerm,
+      platform: filterPlatform !== 'all' ? filterPlatform : undefined,
+      strategy: filterCategory !== 'all' ? filterCategory : undefined 
+    }]
   });
+
+  // Transform signals to match DownloadItem interface
+  const downloads: DownloadItem[] = signalsData?.signals?.map((signal: any) => ({
+    id: signal.id?.toString() || '',
+    title: signal.name || '',
+    description: signal.description || '',
+    version: signal.version || '1.0.0',
+    platform: signal.platform || 'MT4',
+    category: signal.strategyType || signal.strategy || 'Expert Advisor',
+    fileUrl: signal.fileUrl || '',
+    downloadSize: signal.fileSize || 'Unknown',
+    downloadCount: signal.downloadCount || 0,
+    featured: signal.isFeatured || false,
+    price: signal.price || 0,
+    createdAt: new Date(signal.createdAt || Date.now()),
+    updatedAt: new Date(signal.updatedAt || signal.createdAt || Date.now())
+  })) || [];
 
   // Create/Update download mutation
   const saveMutation = useMutation({
