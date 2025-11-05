@@ -95,6 +95,10 @@ export function generateMetaTags({
 
 // Canonical URL Generation
 export function generateCanonicalUrl(path: string): string {
+  // Handle undefined or null path
+  if (!path) {
+    return SITE_URL;
+  }
   // Remove trailing slash and query parameters for canonical
   const cleanPath = path.replace(/\/$/, '').split('?')[0];
   return `${SITE_URL}${cleanPath}`;
