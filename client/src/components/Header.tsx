@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Menu, X, Download, TrendingUp, BookOpen, Search, ChevronDown, Folder, BarChart3, FileCode, Zap, Layout } from 'lucide-react';
+import { Menu, X, Download, TrendingUp, BookOpen, Search, ChevronDown, Folder, BarChart3, FileCode, Zap, Layout, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ThemeToggle from './ThemeToggle';
 import GlobalSearch from './GlobalSearch';
@@ -48,6 +48,7 @@ export default function Header() {
   const navLinks = [
     { href: '/', label: 'Home', icon: null },
     { href: '/blog', label: 'Blog', icon: BookOpen },
+    { href: '/signals', label: 'Signals', icon: Bot },
   ];
 
   return (
