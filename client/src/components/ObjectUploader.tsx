@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import Uppy from "@uppy/core";
-import Dashboard from "@uppy/dashboard";
-// CSS imports are handled differently - Dashboard will use minimal styling
+import DashboardPlugin from "@uppy/dashboard";
+// Dashboard will use its own inline styles
 import AwsS3 from "@uppy/aws-s3";
 import type { UploadResult } from "@uppy/core";
 import { Button } from "@/components/ui/button";
@@ -62,6 +62,7 @@ export function ObjectUploader({
   disabled = false,
 }: ObjectUploaderProps) {
   const [showModal, setShowModal] = useState(false);
+  const dashboardRef = useRef<HTMLDivElement>(null);
   const [uppy] = useState(() =>
     new Uppy({
       restrictions: {
@@ -71,6 +72,13 @@ export function ObjectUploader({
       },
       autoProceed: false,
     })
+      .use(DashboardPlugin, {
+        inline: true,
+        target: null,
+        proudlyDisplayPoweredByUppy: false,
+        height: 500,
+        width: '100%',
+      })
       .use(AwsS3, {
         shouldUseMultipart: false,
         getUploadParameters: onGetUploadParameters,
@@ -80,6 +88,18 @@ export function ObjectUploader({
         setShowModal(false);
       })
   );
+
+  // Mount/unmount the Dashboard when modal opens/closes
+  useEffect(() => {
+    if (showModal && dashboardRef.current) {
+      const dashboard = uppy.getPlugin('Dashboard') as any;
+      if (dashboard) {
+        dashboard.setOptions({
+          target: dashboardRef.current,
+        });
+      }
+    }
+  }, [showModal, uppy]);
 
   return (
     <div>
@@ -97,12 +117,7 @@ export function ObjectUploader({
       {showModal && (
         <Dialog open={showModal} onOpenChange={setShowModal}>
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
-            <Dashboard
-              uppy={uppy}
-              proudlyDisplayPoweredByUppy={false}
-              height={500}
-              width="100%"
-            />
+            <div ref={dashboardRef} />
           </DialogContent>
         </Dialog>
       )}
