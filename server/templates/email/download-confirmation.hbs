@@ -1,0 +1,68 @@
+<mjml>
+  <mj-head>
+    <mj-title>Download Confirmation</mj-title>
+    <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+    <mj-attributes>
+      <mj-all font-family="Inter, Arial, sans-serif" />
+      <mj-text font-size="14px" color="#374151" line-height="1.6" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="#f3f4f6">
+    <!-- Header -->
+    <mj-section background-color="#1f2937" padding="20px">
+      <mj-column>
+        <mj-text color="#ffffff" font-size="24px" font-weight="700" align="center">
+          Download Successful
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Content -->
+    <mj-section padding="30px 20px" background-color="#ffffff">
+      <mj-column>
+        <mj-text font-size="18px" font-weight="600" color="#1f2937" padding-bottom="20px">
+          Thank you for downloading!
+        </mj-text>
+        
+        <mj-text padding-bottom="20px">
+          Your download of <strong>{{downloadName}}</strong> has been confirmed.
+        </mj-text>
+        
+        <mj-wrapper padding="15px" background-color="#f0fdf4" border="1px solid #86efac" border-radius="8px">
+          <mj-text color="#166534">
+            <strong>File:</strong> {{fileName}}<br/>
+            <strong>Size:</strong> {{fileSize}}<br/>
+            <strong>Version:</strong> {{version}}<br/>
+            <strong>Platform:</strong> {{platform}}
+          </mj-text>
+        </mj-wrapper>
+        
+        <mj-text padding="20px 0" font-weight="600" color="#1f2937">
+          Installation Guide:
+        </mj-text>
+        
+        <mj-text color="#374151">
+          1. Open your MT4/MT5 platform<br/>
+          2. Click File → Open Data Folder<br/>
+          3. Navigate to MQL4/MQL5 → Experts<br/>
+          4. Copy the downloaded file there<br/>
+          5. Restart your platform<br/>
+          6. Find the EA in the Navigator panel
+        </mj-text>
+        
+        <mj-button href="{{guideUrl}}" background-color="#3b82f6" color="#ffffff" font-weight="600" border-radius="8px" margin="20px 0">
+          View Full Installation Guide
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <!-- Support -->
+    <mj-section padding="20px" background-color="#f9fafb">
+      <mj-column>
+        <mj-text align="center" color="#6b7280" font-size="13px">
+          Need help? Contact support at {{supportEmail}}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

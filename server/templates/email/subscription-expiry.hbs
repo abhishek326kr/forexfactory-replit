@@ -1,0 +1,92 @@
+<mjml>
+  <mj-head>
+    <mj-title>Subscription Expiring Soon</mj-title>
+    <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+    <mj-attributes>
+      <mj-all font-family="Inter, Arial, sans-serif" />
+      <mj-text font-size="14px" color="#374151" line-height="1.6" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="#f3f4f6">
+    <!-- Warning Header -->
+    <mj-section background-color="#f59e0b" padding="25px 20px">
+      <mj-column>
+        <mj-text color="#ffffff" font-size="24px" font-weight="700" align="center">
+          ⚠️ Subscription Expiring Soon
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Content -->
+    <mj-section padding="30px 20px" background-color="#ffffff">
+      <mj-column>
+        <mj-text padding-bottom="20px">
+          Hi {{userName}},
+        </mj-text>
+        
+        <mj-text padding-bottom="20px">
+          Your {{planName}} subscription will expire in <strong>{{daysRemaining}} days</strong> on <strong>{{expiryDate}}</strong>.
+        </mj-text>
+        
+        <mj-text padding-bottom="20px">
+          Don't lose access to your premium benefits! Renew now to continue enjoying:
+        </mj-text>
+        
+        <mj-wrapper padding="15px" background-color="#fef3c7" border="1px solid #fcd34d" border-radius="8px">
+          <mj-text color="#92400e">
+            • Unlimited EA downloads<br/>
+            • Premium trading signals<br/>
+            • Priority customer support<br/>
+            • Exclusive member content<br/>
+            • Advanced trading tools
+          </mj-text>
+        </mj-wrapper>
+        
+        <mj-text font-weight="600" color="#1f2937" padding="20px 0 15px 0">
+          Special Renewal Offer
+        </mj-text>
+        
+        <mj-text padding-bottom="20px">
+          Renew now and save <strong>{{discountPercent}}%</strong> on your next billing period!
+        </mj-text>
+        
+        <mj-button href="{{renewUrl}}" background-color="#10b981" color="#ffffff" font-weight="600" border-radius="8px" font-size="16px">
+          Renew Subscription
+        </mj-button>
+        
+        <mj-text align="center" color="#6b7280" font-size="13px" padding="20px 0 0 0">
+          or
+        </mj-text>
+        
+        <mj-text align="center" padding="10px 0">
+          <a href="{{plansUrl}}" style="color: #3b82f6; text-decoration: none;">View Other Plans</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- What Happens Next -->
+    <mj-section padding="20px" background-color="#f9fafb">
+      <mj-column>
+        <mj-text font-weight="600" color="#1f2937" padding-bottom="10px">
+          What happens when my subscription expires?
+        </mj-text>
+        <mj-text color="#6b7280" font-size="13px">
+          • Your account will revert to a free membership<br/>
+          • You'll lose access to premium content<br/>
+          • Your download history will be preserved<br/>
+          • You can reactivate anytime
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Footer -->
+    <mj-section padding="20px" background-color="#f9fafb">
+      <mj-column>
+        <mj-text align="center" color="#6b7280" font-size="12px">
+          Need help? Contact us at {{supportEmail}}<br/>
+          <a href="{{unsubscribeUrl}}" style="color: #9ca3af;">Unsubscribe from renewal reminders</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

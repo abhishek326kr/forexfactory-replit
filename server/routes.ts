@@ -49,6 +49,9 @@ import {
   ObjectNotFoundError,
 } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
+import { indexingService } from "./services/indexing-service";
+import { aiSeoService } from "./services/ai-seo-service";
+import { SeoService } from "./services/seo-service";
 
 // Dynamic storage selection based on database availability
 let storage: IStorage = memStorage;
@@ -4048,6 +4051,333 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error updating SEO meta:", error);
       res.status(500).json({ error: "Failed to update SEO meta", message: error.message });
+    }
+  });
+
+  // ==================== ADVANCED SEO ENDPOINTS ====================
+
+  const seoService = new SeoService();
+
+  // POST /api/admin/seo/generate-meta - Generate AI-powered meta tags
+  app.post("/api/admin/seo/generate-meta", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { content, title, targetKeywords, contentType, tone, maxLength } = req.body;
+      
+      if (!content) {
+        return res.status(400).json({ error: "Content is required" });
+      }
+      
+      const metaTags = await aiSeoService.generateMetaTags({
+        content,
+        title,
+        targetKeywords,
+        contentType,
+        tone,
+        maxLength
+      });
+      
+      res.json({ success: true, data: metaTags });
+    } catch (error: any) {
+      console.error("Error generating meta tags:", error);
+      res.status(500).json({ error: "Failed to generate meta tags", message: error.message });
+    }
+  });
+
+  // POST /api/admin/seo/generate-schema - Generate schema markup
+  app.post("/api/admin/seo/generate-schema", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { type, data } = req.body;
+      
+      if (!type || !data) {
+        return res.status(400).json({ error: "Schema type and data are required" });
+      }
+      
+      const schemaMarkup = seoService.buildJSONLD({
+        type,
+        data
+      });
+      
+      res.json({ 
+        success: true, 
+        data: { 
+          markup: schemaMarkup,
+          preview: JSON.parse(schemaMarkup.replace(/<script[^>]*>|<\/script>/g, ''))
+        } 
+      });
+    } catch (error: any) {
+      console.error("Error generating schema markup:", error);
+      res.status(500).json({ error: "Failed to generate schema markup", message: error.message });
+    }
+  });
+
+  // POST /api/admin/seo/index-post - Submit URL to search engines
+  app.post("/api/admin/seo/index-post", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { url, engines, priority, updateType } = req.body;
+      
+      if (!url) {
+        return res.status(400).json({ error: "URL is required" });
+      }
+      
+      const results = await indexingService.submitUrl(url, {
+        engines,
+        priority,
+        updateType
+      });
+      
+      res.json({ 
+        success: true, 
+        data: {
+          results,
+          summary: {
+            total: results.length,
+            successful: results.filter(r => r.success).length,
+            failed: results.filter(r => !r.success).length
+          }
+        }
+      });
+    } catch (error: any) {
+      console.error("Error submitting URL for indexing:", error);
+      res.status(500).json({ error: "Failed to submit URL for indexing", message: error.message });
+    }
+  });
+
+  // POST /api/admin/seo/index-batch - Batch submit URLs to search engines
+  app.post("/api/admin/seo/index-batch", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { urls, engines, priority, updateType } = req.body;
+      
+      if (!urls || !Array.isArray(urls) || urls.length === 0) {
+        return res.status(400).json({ error: "URLs array is required" });
+      }
+      
+      const results = await indexingService.batchSubmit(urls, {
+        engines,
+        priority,
+        updateType
+      });
+      
+      res.json({ success: true, data: results });
+    } catch (error: any) {
+      console.error("Error batch submitting URLs:", error);
+      res.status(500).json({ error: "Failed to batch submit URLs", message: error.message });
+    }
+  });
+
+  // POST /api/admin/seo/index-all-blogs - Submit all blogs for indexing
+  app.post("/api/admin/seo/index-all-blogs", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { engines } = req.body;
+      
+      const results = await indexingService.submitAllBlogs({ engines });
+      
+      res.json({ success: true, data: results });
+    } catch (error: any) {
+      console.error("Error indexing all blogs:", error);
+      res.status(500).json({ error: "Failed to index all blogs", message: error.message });
+    }
+  });
+
+  // POST /api/admin/seo/index-all-signals - Submit all signals for indexing
+  app.post("/api/admin/seo/index-all-signals", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { engines } = req.body;
+      
+      const results = await indexingService.submitAllSignals({ engines });
+      
+      res.json({ success: true, data: results });
+    } catch (error: any) {
+      console.error("Error indexing all signals:", error);
+      res.status(500).json({ error: "Failed to index all signals", message: error.message });
+    }
+  });
+
+  // GET /api/admin/seo/serp-preview - Get SERP preview
+  app.get("/api/admin/seo/serp-preview", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { title, description, url } = req.query;
+      
+      if (!title || !description) {
+        return res.status(400).json({ error: "Title and description are required" });
+      }
+      
+      const preview = {
+        title: title as string,
+        description: description as string,
+        url: url as string || 'https://forexeahub.com/page',
+        displayUrl: new URL(url as string || 'https://forexeahub.com/page').hostname,
+        breadcrumb: (url as string || '/page').split('/').filter(Boolean).join(' › '),
+        titleLength: (title as string).length,
+        descriptionLength: (description as string).length,
+        warnings: [] as string[]
+      };
+      
+      // Add warnings
+      if (preview.titleLength > 60) {
+        preview.warnings.push(`Title is ${preview.titleLength} characters (recommended: 50-60)`);
+      }
+      if (preview.descriptionLength > 160) {
+        preview.warnings.push(`Description is ${preview.descriptionLength} characters (recommended: 150-160)`);
+      }
+      if (preview.descriptionLength < 120) {
+        preview.warnings.push(`Description is ${preview.descriptionLength} characters (recommended: 150-160)`);
+      }
+      
+      res.json({ success: true, data: preview });
+    } catch (error: any) {
+      console.error("Error generating SERP preview:", error);
+      res.status(500).json({ error: "Failed to generate SERP preview", message: error.message });
+    }
+  });
+
+  // POST /api/admin/seo/analyze-content - Analyze content SEO
+  app.post("/api/admin/seo/analyze-content", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { content, title, description, keywords, url } = req.body;
+      
+      if (!content) {
+        return res.status(400).json({ error: "Content is required" });
+      }
+      
+      const analysis = await aiSeoService.analyzeContentSEO(content, {
+        title,
+        description,
+        keywords,
+        url
+      });
+      
+      res.json({ success: true, data: analysis });
+    } catch (error: any) {
+      console.error("Error analyzing content SEO:", error);
+      res.status(500).json({ error: "Failed to analyze content SEO", message: error.message });
+    }
+  });
+
+  // POST /api/admin/seo/generate-alt-text - Generate alt text for images
+  app.post("/api/admin/seo/generate-alt-text", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { surroundingText, pageTitle, imageUrl, currentAlt } = req.body;
+      
+      const altText = await aiSeoService.generateAltText({
+        surroundingText,
+        pageTitle,
+        imageUrl,
+        currentAlt
+      });
+      
+      res.json({ success: true, data: { altText } });
+    } catch (error: any) {
+      console.error("Error generating alt text:", error);
+      res.status(500).json({ error: "Failed to generate alt text", message: error.message });
+    }
+  });
+
+  // POST /api/admin/seo/generate-keywords - Generate keyword recommendations
+  app.post("/api/admin/seo/generate-keywords", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { content, currentKeywords, competitorKeywords } = req.body;
+      
+      if (!content) {
+        return res.status(400).json({ error: "Content is required" });
+      }
+      
+      const keywords = await aiSeoService.generateKeywordRecommendations(
+        content,
+        currentKeywords,
+        competitorKeywords
+      );
+      
+      res.json({ success: true, data: keywords });
+    } catch (error: any) {
+      console.error("Error generating keywords:", error);
+      res.status(500).json({ error: "Failed to generate keywords", message: error.message });
+    }
+  });
+
+  // POST /api/admin/seo/optimize-title - Optimize title for SEO
+  app.post("/api/admin/seo/optimize-title", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { currentTitle, targetKeywords, maxLength, contentType } = req.body;
+      
+      if (!currentTitle) {
+        return res.status(400).json({ error: "Current title is required" });
+      }
+      
+      const optimizedTitle = await aiSeoService.optimizeTitle(currentTitle, {
+        targetKeywords,
+        maxLength,
+        contentType
+      });
+      
+      res.json({ success: true, data: optimizedTitle });
+    } catch (error: any) {
+      console.error("Error optimizing title:", error);
+      res.status(500).json({ error: "Failed to optimize title", message: error.message });
+    }
+  });
+
+  // POST /api/admin/seo/optimization-suggestions - Get optimization suggestions
+  app.post("/api/admin/seo/optimization-suggestions", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { content, title, description, keywords } = req.body;
+      
+      if (!content) {
+        return res.status(400).json({ error: "Content is required" });
+      }
+      
+      const suggestions = await aiSeoService.generateOptimizationSuggestions(content, {
+        title,
+        description,
+        keywords
+      });
+      
+      res.json({ success: true, data: suggestions });
+    } catch (error: any) {
+      console.error("Error generating optimization suggestions:", error);
+      res.status(500).json({ error: "Failed to generate optimization suggestions", message: error.message });
+    }
+  });
+
+  // GET /api/admin/seo/indexing-history - Get indexing history
+  app.get("/api/admin/seo/indexing-history", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { url, engine } = req.query;
+      
+      const history = await indexingService.getIndexingHistory(
+        url as string | undefined,
+        engine as string | undefined
+      );
+      
+      res.json({ success: true, data: history });
+    } catch (error: any) {
+      console.error("Error fetching indexing history:", error);
+      res.status(500).json({ error: "Failed to fetch indexing history", message: error.message });
+    }
+  });
+
+  // GET /api/admin/seo/indexing-stats - Get indexing statistics
+  app.get("/api/admin/seo/indexing-stats", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const stats = await indexingService.getIndexingStats();
+      
+      res.json({ success: true, data: stats });
+    } catch (error: any) {
+      console.error("Error fetching indexing stats:", error);
+      res.status(500).json({ error: "Failed to fetch indexing stats", message: error.message });
+    }
+  });
+
+  // POST /api/admin/seo/submit-sitemap - Submit sitemap to search engines
+  app.post("/api/admin/seo/submit-sitemap", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { sitemapUrl } = req.body;
+      
+      const results = await indexingService.submitSitemap(sitemapUrl);
+      
+      res.json({ success: true, data: results });
+    } catch (error: any) {
+      console.error("Error submitting sitemap:", error);
+      res.status(500).json({ error: "Failed to submit sitemap", message: error.message });
     }
   });
 

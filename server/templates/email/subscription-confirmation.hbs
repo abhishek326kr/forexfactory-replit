@@ -1,0 +1,80 @@
+<mjml>
+  <mj-head>
+    <mj-title>Subscription Confirmed</mj-title>
+    <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+    <mj-attributes>
+      <mj-all font-family="Inter, Arial, sans-serif" />
+      <mj-text font-size="14px" color="#374151" line-height="1.6" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="#f3f4f6">
+    <!-- Header -->
+    <mj-section background-color="#10b981" padding="30px 20px">
+      <mj-column>
+        <mj-text color="#ffffff" font-size="28px" font-weight="700" align="center">
+          ✓ Subscription Activated
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Content -->
+    <mj-section padding="30px 20px" background-color="#ffffff">
+      <mj-column>
+        <mj-text font-size="18px" font-weight="600" color="#1f2937" padding-bottom="20px">
+          Welcome to {{planName}}!
+        </mj-text>
+        
+        <mj-text padding-bottom="20px">
+          Hi {{userName}},
+        </mj-text>
+        
+        <mj-text padding-bottom="20px">
+          Your subscription has been successfully activated. You now have full access to all premium features.
+        </mj-text>
+        
+        <mj-wrapper padding="20px" background-color="#f9fafb" border-radius="8px">
+          <mj-text font-weight="600" color="#1f2937" padding-bottom="10px">
+            Subscription Details:
+          </mj-text>
+          <mj-text color="#6b7280" font-size="13px">
+            <strong>Plan:</strong> {{planName}}<br/>
+            <strong>Status:</strong> Active<br/>
+            <strong>Start Date:</strong> {{startDate}}<br/>
+            <strong>Next Billing:</strong> {{nextBilling}}<br/>
+            <strong>Amount:</strong> ${{amount}}/{{billingPeriod}}
+          </mj-text>
+        </mj-wrapper>
+        
+        <mj-text font-weight="600" color="#1f2937" padding="20px 0 10px 0">
+          What's Included:
+        </mj-text>
+        
+        <mj-text color="#374151">
+          ✓ Unlimited downloads<br/>
+          ✓ Premium EAs and indicators<br/>
+          ✓ Priority support<br/>
+          ✓ Advanced trading signals<br/>
+          ✓ Exclusive member content<br/>
+          ✓ Early access to new tools
+        </mj-text>
+        
+        <mj-button href="{{dashboardUrl}}" background-color="#3b82f6" color="#ffffff" font-weight="600" border-radius="8px" margin="30px 0 10px 0">
+          Access Premium Content
+        </mj-button>
+        
+        <mj-button href="{{billingUrl}}" background-color="#ffffff" color="#3b82f6" font-weight="600" border="2px solid #3b82f6" border-radius="8px">
+          Manage Subscription
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <!-- Footer -->
+    <mj-section padding="20px" background-color="#f9fafb">
+      <mj-column>
+        <mj-text align="center" color="#6b7280" font-size="12px">
+          Questions? Contact us at {{supportEmail}}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

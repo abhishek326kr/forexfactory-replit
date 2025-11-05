@@ -1,0 +1,62 @@
+<mjml>
+  <mj-head>
+    <mj-title>New Trading Signal Alert</mj-title>
+    <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+    <mj-attributes>
+      <mj-all font-family="Inter, Arial, sans-serif" />
+      <mj-text font-size="14px" color="#374151" line-height="1.6" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="#f3f4f6">
+    <!-- Alert Header -->
+    <mj-section background-color="#dc2626" padding="20px">
+      <mj-column>
+        <mj-text color="#ffffff" font-size="20px" font-weight="700" align="center">
+          🔔 NEW TRADING SIGNAL ALERT
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Signal Details -->
+    <mj-section padding="30px 20px" background-color="#ffffff">
+      <mj-column>
+        <mj-text font-size="20px" font-weight="700" color="#1f2937" padding-bottom="20px">
+          {{signalTitle}}
+        </mj-text>
+        
+        <mj-wrapper padding="15px" background-color="#f9fafb" border-radius="8px">
+          <mj-text font-weight="600" color="#374151" padding-bottom="10px">
+            Signal Details:
+          </mj-text>
+          <mj-text color="#6b7280" font-size="13px">
+            <strong>Platform:</strong> {{platform}}<br/>
+            <strong>Strategy:</strong> {{strategy}}<br/>
+            {{#if isPremium}}
+            <strong>Type:</strong> Premium Signal<br/>
+            <strong>Price:</strong> ${{price}}<br/>
+            {{else}}
+            <strong>Type:</strong> Free Signal<br/>
+            {{/if}}
+          </mj-text>
+        </mj-wrapper>
+        
+        <mj-text padding="20px 0" color="#374151">
+          {{signalDescription}}
+        </mj-text>
+        
+        <mj-button href="{{downloadUrl}}" background-color="#10b981" color="#ffffff" font-weight="600" border-radius="8px">
+          Download Now
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <!-- Footer -->
+    <mj-section padding="20px" background-color="#f9fafb">
+      <mj-column>
+        <mj-text align="center" color="#9ca3af" font-size="12px">
+          <a href="{{unsubscribeUrl}}" style="color: #6b7280;">Unsubscribe from signal alerts</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

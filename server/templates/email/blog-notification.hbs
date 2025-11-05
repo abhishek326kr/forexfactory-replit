@@ -1,0 +1,58 @@
+<mjml>
+  <mj-head>
+    <mj-title>New Blog Post - Forex EA Hub</mj-title>
+    <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+    <mj-attributes>
+      <mj-all font-family="Inter, Arial, sans-serif" />
+      <mj-text font-size="14px" color="#374151" line-height="1.6" />
+      <mj-section background-color="#ffffff" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="#f3f4f6">
+    <!-- Header -->
+    <mj-section background-color="#1f2937" padding="20px">
+      <mj-column>
+        <mj-text color="#ffffff" font-size="24px" font-weight="700" align="center">
+          Forex EA Hub
+        </mj-text>
+        <mj-text color="#9ca3af" font-size="14px" align="center" padding-top="5px">
+          New Trading Insights
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Blog Post Preview -->
+    <mj-section padding="30px 20px" background-color="#ffffff">
+      <mj-column>
+        {{#if postImage}}
+        <mj-image src="{{postImage}}" alt="{{postTitle}}" border-radius="8px" padding-bottom="20px" />
+        {{/if}}
+        
+        <mj-text font-size="24px" font-weight="700" color="#1f2937" padding-bottom="15px">
+          {{postTitle}}
+        </mj-text>
+        
+        <mj-text color="#6b7280" font-size="13px" padding-bottom="20px">
+          By {{author}} • {{category}}
+        </mj-text>
+        
+        <mj-text color="#374151" padding-bottom="25px">
+          {{postExcerpt}}...
+        </mj-text>
+        
+        <mj-button href="{{postUrl}}" background-color="#3b82f6" color="#ffffff" font-weight="600" border-radius="8px">
+          Read Full Article
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <!-- Footer -->
+    <mj-section padding="20px" background-color="#f9fafb">
+      <mj-column>
+        <mj-text align="center" color="#9ca3af" font-size="12px">
+          <a href="{{unsubscribeUrl}}" style="color: #6b7280;">Unsubscribe from blog notifications</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

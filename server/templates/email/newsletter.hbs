@@ -1,0 +1,151 @@
+<mjml>
+  <mj-head>
+    <mj-title>Forex EA Hub Newsletter</mj-title>
+    <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+    <mj-attributes>
+      <mj-all font-family="Inter, Arial, sans-serif" />
+      <mj-text font-size="14px" color="#374151" line-height="1.6" />
+      <mj-section background-color="#ffffff" />
+    </mj-attributes>
+    <mj-style>
+      .post-card {
+        border: 1px solid #e5e7eb !important;
+        border-radius: 8px !important;
+        padding: 15px !important;
+        margin-bottom: 15px !important;
+      }
+      .read-more {
+        color: #3b82f6 !important;
+        text-decoration: none !important;
+        font-weight: 600 !important;
+      }
+      .read-more:hover {
+        text-decoration: underline !important;
+      }
+      .category-badge {
+        background-color: #eff6ff !important;
+        color: #1e40af !important;
+        padding: 4px 12px !important;
+        border-radius: 12px !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        display: inline-block !important;
+      }
+    </mj-style>
+  </mj-head>
+  <mj-body background-color="#f3f4f6">
+    <!-- Header with gradient -->
+    <mj-section background-url="https://forexeahub.com/newsletter-header.jpg" background-size="cover" background-repeat="no-repeat" padding="40px 20px">
+      <mj-column>
+        <mj-text color="#ffffff" font-size="32px" font-weight="700" align="center">
+          Forex EA Hub
+        </mj-text>
+        <mj-text color="#ffffff" font-size="16px" align="center" padding-top="10px">
+          Your Weekly Trading Intelligence Update
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Greeting Section -->
+    <mj-section padding="30px 20px 20px 20px" background-color="#ffffff">
+      <mj-column>
+        <mj-text font-size="18px" font-weight="600" color="#1f2937" padding-bottom="15px">
+          Hello {{userName}}!
+        </mj-text>
+        
+        <mj-text padding-bottom="20px">
+          Welcome to this week's edition of the Forex EA Hub newsletter. We've curated the best trading insights, EA updates, and market analysis just for you.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Main Content -->
+    <mj-section padding="0 20px 20px 20px" background-color="#ffffff">
+      <mj-column>
+        <mj-text font-size="16px" color="#1f2937" padding-bottom="20px">
+          {{{content}}}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Featured Posts Section -->
+    {{#if featuredPosts}}
+    <mj-section padding="20px" background-color="#ffffff">
+      <mj-column>
+        <mj-text font-size="20px" font-weight="600" color="#1f2937" padding-bottom="20px">
+          Featured Articles This Week
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    {{#each featuredPosts}}
+    <mj-section padding="0 20px 20px 20px" background-color="#ffffff">
+      <mj-column>
+        <mj-wrapper css-class="post-card">
+          {{#if this.image}}
+          <mj-image src="{{this.image}}" alt="{{this.title}}" border-radius="8px 8px 0 0" padding="0" />
+          {{/if}}
+          <mj-text font-size="16px" font-weight="600" color="#1f2937" padding="15px 0 10px 0">
+            {{this.title}}
+          </mj-text>
+          <mj-text color="#6b7280" padding-bottom="15px">
+            {{this.excerpt}}...
+          </mj-text>
+          <mj-button href="{{this.url}}" background-color="#3b82f6" color="#ffffff" border-radius="6px" font-size="14px" font-weight="500">
+            Read Full Article
+          </mj-button>
+        </mj-wrapper>
+      </mj-column>
+    </mj-section>
+    {{/each}}
+    {{/if}}
+
+    <!-- CTA Section -->
+    <mj-section background-color="#1e3a8a" padding="30px 20px">
+      <mj-column>
+        <mj-text color="#ffffff" font-size="18px" font-weight="600" align="center" padding-bottom="15px">
+          Unlock Premium Trading Tools
+        </mj-text>
+        <mj-text color="#dbeafe" align="center" padding-bottom="20px">
+          Get exclusive access to advanced EAs, indicators, and trading strategies
+        </mj-text>
+        <mj-button href="https://forexeahub.com/premium" background-color="#ffffff" color="#1e3a8a" font-weight="600" border-radius="8px">
+          Explore Premium Content
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <!-- Social Links -->
+    <mj-section padding="20px" background-color="#f9fafb">
+      <mj-column>
+        <mj-text align="center" color="#6b7280" font-size="14px" padding-bottom="15px">
+          Connect with us
+        </mj-text>
+        <mj-social font-size="15px" icon-size="30px" mode="horizontal" align="center">
+          <mj-social-element name="facebook" href="https://facebook.com/forexeahub" background-color="#3b5998" />
+          <mj-social-element name="twitter" href="https://twitter.com/forexeahub" background-color="#1DA1F2" />
+          <mj-social-element name="linkedin" href="https://linkedin.com/company/forexeahub" background-color="#0077B5" />
+          <mj-social-element name="youtube" href="https://youtube.com/forexeahub" background-color="#FF0000" />
+        </mj-social>
+      </mj-column>
+    </mj-section>
+
+    <!-- Footer -->
+    <mj-section padding="20px" background-color="#f9fafb">
+      <mj-column>
+        <mj-text align="center" color="#9ca3af" font-size="12px">
+          You're receiving this because you subscribed to Forex EA Hub updates.
+        </mj-text>
+        <mj-text align="center" color="#9ca3af" font-size="12px" padding-top="10px">
+          <a href="{{unsubscribeUrl}}" style="color: #6b7280; text-decoration: underline;">Unsubscribe</a> | 
+          <a href="https://forexeahub.com/preferences" style="color: #6b7280; text-decoration: underline;">Update Preferences</a> | 
+          <a href="https://forexeahub.com/privacy" style="color: #6b7280; text-decoration: underline;">Privacy Policy</a>
+        </mj-text>
+        <mj-text align="center" color="#9ca3af" font-size="11px" padding-top="15px">
+          © {{currentYear}} Forex EA Hub. All rights reserved.
+          <br />123 Trading Street, Financial District, NY 10004
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>
