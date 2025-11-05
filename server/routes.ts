@@ -2600,6 +2600,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return data;
   }
 
+  // GET /api/admin/categories - Get all categories for the dropdown
+  app.get("/api/admin/categories", async (req: Request, res: Response) => {
+    try {
+      const categories = await prisma.category.findMany({
+        select: {
+          categoryId: true,
+          name: true,
+          description: true,
+          status: true
+        },
+        where: {
+          status: 'active' // Only return active categories
+        },
+        orderBy: {
+          name: 'asc'
+        }
+      });
+      
+      // Format response with id and name fields as expected by PostEditor
+      const formattedCategories = categories.map(cat => ({
+        id: cat.categoryId.toString(),
+        name: cat.name,
+        description: cat.description,
+        status: cat.status
+      }));
+      
+      res.json(formattedCategories);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+
   // ==================== COMPREHENSIVE BLOG ENDPOINTS ====================
   // (Aliased from existing /api/posts endpoints for compatibility)
   

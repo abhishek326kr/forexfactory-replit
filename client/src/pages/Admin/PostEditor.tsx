@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Editor } from '@/components/Editor';
 import {
   Form,
   FormControl,
@@ -33,14 +33,6 @@ import {
   Plus,
   Image,
   Loader2,
-  Bold,
-  Italic,
-  Underline,
-  List,
-  ListOrdered,
-  Link,
-  Quote,
-  Code,
   ChevronDown,
   Settings2,
   FileText,
@@ -191,56 +183,6 @@ export default function PostEditor() {
     await saveMutation.mutateAsync({ ...data, status });
   };
 
-  // Apply formatting to content
-  const applyFormatting = (format: string) => {
-    const textarea = document.getElementById('content-editor') as HTMLTextAreaElement;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = textarea.value.substring(start, end);
-    const beforeText = textarea.value.substring(0, start);
-    const afterText = textarea.value.substring(end);
-
-    let formattedText = selectedText;
-    switch (format) {
-      case 'bold':
-        formattedText = `**${selectedText}**`;
-        break;
-      case 'italic':
-        formattedText = `*${selectedText}*`;
-        break;
-      case 'underline':
-        formattedText = `<u>${selectedText}</u>`;
-        break;
-      case 'list':
-        formattedText = selectedText.split('\n').map(line => `- ${line}`).join('\n');
-        break;
-      case 'ordered':
-        formattedText = selectedText.split('\n').map((line, i) => `${i + 1}. ${line}`).join('\n');
-        break;
-      case 'link':
-        formattedText = `[${selectedText}](url)`;
-        break;
-      case 'quote':
-        formattedText = `> ${selectedText}`;
-        break;
-      case 'code':
-        formattedText = `\`${selectedText}\``;
-        break;
-    }
-
-    const newContent = beforeText + formattedText + afterText;
-    form.setValue('content', newContent);
-    
-    // Restore cursor position
-    setTimeout(() => {
-      textarea.selectionStart = start;
-      textarea.selectionEnd = start + formattedText.length;
-      textarea.focus();
-    }, 0);
-  };
-
   if (postLoading) {
     return (
       <AdminLayout title="Loading...">
@@ -317,87 +259,7 @@ export default function PostEditor() {
                     )}
                   />
 
-                  {/* Formatting Toolbar */}
-                  <div className="border rounded-md p-2 bg-muted/30">
-                    <div className="flex flex-wrap gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => applyFormatting('bold')}
-                        data-testid="button-bold"
-                      >
-                        <Bold className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => applyFormatting('italic')}
-                        data-testid="button-italic"
-                      >
-                        <Italic className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => applyFormatting('underline')}
-                        data-testid="button-underline"
-                      >
-                        <Underline className="h-4 w-4" />
-                      </Button>
-                      <Separator orientation="vertical" className="h-6" />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => applyFormatting('list')}
-                        data-testid="button-list"
-                      >
-                        <List className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => applyFormatting('ordered')}
-                        data-testid="button-ordered-list"
-                      >
-                        <ListOrdered className="h-4 w-4" />
-                      </Button>
-                      <Separator orientation="vertical" className="h-6" />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => applyFormatting('link')}
-                        data-testid="button-link"
-                      >
-                        <Link className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => applyFormatting('quote')}
-                        data-testid="button-quote"
-                      >
-                        <Quote className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => applyFormatting('code')}
-                        data-testid="button-code"
-                      >
-                        <Code className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Content Editor */}
+                  {/* Content Editor with TipTap */}
                   <FormField
                     control={form.control}
                     name="content"
@@ -405,16 +267,13 @@ export default function PostEditor() {
                       <FormItem>
                         <FormLabel>Content</FormLabel>
                         <FormControl>
-                          <Textarea
-                            {...field}
-                            id="content-editor"
-                            placeholder="Write your post content here. You can use Markdown for formatting..."
-                            rows={20}
-                            className="font-mono text-sm"
-                            data-testid="input-content"
+                          <Editor
+                            content={field.value}
+                            onChange={field.onChange}
+                            placeholder="Write your post content here..."
                           />
                         </FormControl>
-                        <FormDescription>Supports Markdown formatting</FormDescription>
+                        <FormDescription>Rich text editor with formatting options</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
