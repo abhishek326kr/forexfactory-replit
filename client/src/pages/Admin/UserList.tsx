@@ -54,7 +54,9 @@ import {
   User,
   Filter,
   CheckCircle,
-  XCircle
+  XCircle,
+  FileText,
+  Download
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Label } from '@/components/ui/label';
