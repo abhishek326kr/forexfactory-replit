@@ -830,31 +830,33 @@ export class PrismaStorage implements IStorage {
   // ============================================
   async createCategory(insertCategory: InsertCategory): Promise<Category> {
     try {
-      // Generate slug from name if not provided
-      let slug = insertCategory.slug || insertCategory.name.toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
+      // Check if category with same name exists (name is unique)
+      const existing = await prisma.category.findFirst({
+        where: { name: insertCategory.name }
+      });
       
-      // Ensure slug uniqueness
-      let slugSuffix = 0;
-      let finalSlug = slug;
-      while (true) {
-        const existing = await prisma.category.findFirst({
-          where: { slug: finalSlug }
-        });
-        if (!existing) break;
-        slugSuffix++;
-        finalSlug = `${slug}-${slugSuffix}`;
+      if (existing) {
+        throw new Error(`Category with name "${insertCategory.name}" already exists`);
       }
       
       const category = await prisma.category.create({
         data: {
-          ...insertCategory,
-          slug: finalSlug,
-          status: insertCategory.status || 'active'
+          name: insertCategory.name,
+          description: insertCategory.description || null,
+          status: (insertCategory.status || 'active') as CategoryStatus
         }
       });
-      return category as Category;
+      
+      // Return with generated slug for compatibility
+      return {
+        category_id: category.categoryId,
+        name: category.name,
+        description: category.description,
+        status: category.status as CategoryStatus,
+        slug: category.name.toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+      } as Category;
     } catch (error) {
       handlePrismaError(error);
     }
@@ -902,10 +904,25 @@ export class PrismaStorage implements IStorage {
 
   async getCategoryBySlug(slug: string): Promise<Category | undefined> {
     try {
-      const category = await prisma.category.findFirst({
-        where: { slug }
-      });
-      return category as Category | null || undefined;
+      // Since we don't have slug in DB, find by name and match the generated slug
+      const categories = await prisma.category.findMany();
+      const category = categories.find(cat => 
+        cat.name.toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '') === slug
+      );
+      
+      if (!category) return undefined;
+      
+      return {
+        category_id: category.categoryId,
+        name: category.name,
+        description: category.description,
+        status: category.status as CategoryStatus,
+        slug: category.name.toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+      } as Category;
     } catch (error) {
       handlePrismaError(error);
     }
@@ -914,9 +931,18 @@ export class PrismaStorage implements IStorage {
   async getAllCategories(): Promise<Category[]> {
     try {
       const categories = await prisma.category.findMany({
-        orderBy: { order: 'asc' }
+        orderBy: { name: 'asc' } // Order by name instead of non-existent order field
       });
-      return categories as Category[];
+      
+      return categories.map(cat => ({
+        category_id: cat.categoryId,
+        name: cat.name,
+        description: cat.description,
+        status: cat.status as CategoryStatus,
+        slug: cat.name.toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+      } as Category));
     } catch (error) {
       handlePrismaError(error);
     }
@@ -926,36 +952,32 @@ export class PrismaStorage implements IStorage {
     try {
       const categories = await prisma.category.findMany({
         where: { status: 'active' },
-        orderBy: { order: 'asc' }
+        orderBy: { name: 'asc' } // Order by name instead of non-existent order field
       });
-      return categories as Category[];
+      
+      return categories.map(cat => ({
+        category_id: cat.categoryId,
+        name: cat.name,
+        description: cat.description,
+        status: cat.status as CategoryStatus,
+        slug: cat.name.toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+      } as Category));
     } catch (error) {
       handlePrismaError(error);
     }
   }
 
   async getCategoryTree(): Promise<Category[]> {
-    try {
-      const categories = await prisma.category.findMany({
-        where: { parentId: null },
-        orderBy: { order: 'asc' }
-      });
-      return categories as Category[];
-    } catch (error) {
-      handlePrismaError(error);
-    }
+    // Since we don't have parentId, just return all categories
+    return this.getAllCategories();
   }
 
   async getCategoriesByParent(parentId: number | null): Promise<Category[]> {
-    try {
-      const categories = await prisma.category.findMany({
-        where: { parentId },
-        orderBy: { order: 'asc' }
-      });
-      return categories as Category[];
-    } catch (error) {
-      handlePrismaError(error);
-    }
+    // Since we don't have parentId, return empty array for non-null parent
+    if (parentId !== null) return [];
+    return this.getAllCategories();
   }
 
   async updateCategoryStatus(id: number, status: CategoryStatus): Promise<boolean> {

@@ -641,14 +641,14 @@ export default function CategoryList() {
               <div className="space-y-2">
                 <Label>Parent Category</Label>
                 <Select 
-                  value={form.watch('parentId')} 
-                  onValueChange={(value) => form.setValue('parentId', value)}
+                  value={form.watch('parentId') || 'none'} 
+                  onValueChange={(value) => form.setValue('parentId', value === 'none' ? undefined : value)}
                 >
                   <SelectTrigger data-testid="select-parent-category">
                     <SelectValue placeholder="None (Top level)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None (Top level)</SelectItem>
+                    <SelectItem value="none">None (Top level)</SelectItem>
                     {categories.filter(c => !c.parentId && c.id !== editCategory?.id).map(cat => (
                       <SelectItem key={cat.id} value={cat.id}>
                         {cat.name}
