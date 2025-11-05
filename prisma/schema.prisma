@@ -27,17 +27,17 @@ model Admin {
 
 model Blog {
   id            Int       @id @default(autoincrement())
-  title         String    @db.VarChar(255)
-  seoSlug       String    @map("seo_slug") @db.VarChar(255)
+  title         String    @db.VarChar(500)
+  seoSlug       String    @map("seo_slug") @db.VarChar(500)
   status        BlogStatus
   views         Int?      @default(0)
   createdAt     DateTime  @default(now()) @map("created_at")
   content       String    @db.Text
   author        String    @db.VarChar(255)
-  featuredImage String    @map("featured_image") @db.VarChar(255)
-  tags          String    @db.VarChar(255)
+  featuredImage String    @map("featured_image") @db.Text
+  tags          String    @db.Text
   categoryId    Int       @map("category_id")
-  downloadLink  String?   @map("download_link") @db.VarChar(255)
+  downloadLink  String?   @map("download_link") @db.Text
 
   categories    BlogCategory[]
   comments      Comment[]
