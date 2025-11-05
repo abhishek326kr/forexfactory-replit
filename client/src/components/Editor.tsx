@@ -3,6 +3,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import Underline from '@tiptap/extension-underline';
+import Image from '@tiptap/extension-image';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -19,7 +20,8 @@ import {
   Type,
   Heading1,
   Heading2,
-  Heading3
+  Heading3,
+  Image as ImageIcon
 } from 'lucide-react';
 import { useEffect } from 'react';
 
@@ -48,6 +50,13 @@ export function Editor({ content, onChange, placeholder = "Start writing...", cl
         openOnClick: false,
         HTMLAttributes: {
           class: 'text-primary underline'
+        }
+      }),
+      Image.configure({
+        inline: true,
+        allowBase64: true,
+        HTMLAttributes: {
+          class: 'max-w-full h-auto rounded-lg'
         }
       }),
       Placeholder.configure({
@@ -89,6 +98,18 @@ export function Editor({ content, onChange, placeholder = "Start writing...", cl
     }
 
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  };
+
+  const addImage = () => {
+    if (!editor) return;
+    
+    const url = window.prompt('Enter image URL:');
+
+    if (url === null || url === '') {
+      return;
+    }
+
+    editor.chain().focus().setImage({ src: url }).run();
   };
 
   if (!editor) {
@@ -227,6 +248,16 @@ export function Editor({ content, onChange, placeholder = "Start writing...", cl
             data-testid="button-editor-link"
           >
             <LinkIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={addImage}
+            data-testid="button-editor-image"
+            title="Insert Image"
+          >
+            <ImageIcon className="h-4 w-4" />
           </Button>
           
           <Separator orientation="vertical" className="mx-1 h-6" />
