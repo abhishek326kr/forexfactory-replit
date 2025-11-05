@@ -30,9 +30,9 @@ export default function Home() {
   
   // Fetch top-rated signals (downloads)
   const { data: topSignals, isLoading: signalsLoading, error: signalsError } = useQuery({
-    queryKey: ['/api/signals', { sortBy: 'rating', limit: 6 }],
+    queryKey: ['/api/signals', { sortBy: 'createdAt', limit: 6 }],
     queryFn: async () => {
-      const response = await fetch('/api/signals?sortBy=rating&sortOrder=desc&limit=6');
+      const response = await fetch('/api/signals?sortBy=createdAt&sortOrder=desc&limit=6');
       if (!response.ok) {
         // Fallback to regular signals endpoint
         const fallbackResponse = await fetch('/api/downloads?limit=6');
@@ -219,7 +219,11 @@ export default function Home() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
                 {posts?.map((post: any) => (
-                  <BlogCard key={post.id} {...post} />
+                  <BlogCard 
+                    key={post.id} 
+                    {...post}
+                    tags={typeof post.tags === 'string' ? post.tags.split(',').map((t: string) => t.trim()) : post.tags || []}
+                  />
                 ))}
               </div>
             )}

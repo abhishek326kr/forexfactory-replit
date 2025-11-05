@@ -265,7 +265,11 @@ export default function Blog() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {postsData?.posts?.map((post: any) => (
-                      <BlogCard key={post.id} {...post} />
+                      <BlogCard 
+                        key={post.id} 
+                        {...post}
+                        tags={typeof post.tags === 'string' ? post.tags.split(',').map((t: string) => t.trim()) : post.tags || []}
+                      />
                     ))}
                   </div>
                 )}
