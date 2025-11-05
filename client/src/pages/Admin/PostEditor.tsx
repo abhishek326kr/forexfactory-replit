@@ -36,8 +36,11 @@ import {
   ChevronDown,
   Settings2,
   FileText,
-  User
+  User,
+  Upload
 } from 'lucide-react';
+import { ObjectUploader } from '@/components/ObjectUploader';
+import type { UploadResult } from '@uppy/core';
 
 const postSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title is too long'),
@@ -534,10 +537,88 @@ export default function PostEditor() {
                               placeholder="https://example.com/image.jpg"
                               data-testid="input-featured-image"
                             />
-                            <Button type="button" variant="outline" size="sm" className="w-full">
-                              <Image className="mr-2 h-4 w-4" />
-                              Upload Image
-                            </Button>
+                            <ObjectUploader
+                              maxNumberOfFiles={1}
+                              maxFileSize={5242880} // 5MB
+                              onGetUploadParameters={async () => {
+                                const response = await fetch('/api/admin/upload', {
+                                  method: 'POST',
+                                  credentials: 'include'
+                                });
+                                
+                                if (!response.ok) {
+                                  throw new Error('Failed to get upload URL');
+                                }
+                                
+                                const { uploadURL } = await response.json();
+                                return {
+                                  method: 'PUT' as const,
+                                  url: uploadURL
+                                };
+                              }}
+                              onComplete={async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+                                if (result.successful && result.successful.length > 0) {
+                                  const uploadedFile = result.successful[0];
+                                  const uploadURL = uploadedFile.uploadURL;
+                                  
+                                  // Set ACL and get the normalized path
+                                  const completeResponse = await fetch('/api/admin/upload/complete', {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json'
+                                    },
+                                    credentials: 'include',
+                                    body: JSON.stringify({ uploadURL })
+                                  });
+                                  
+                                  if (!completeResponse.ok) {
+                                    toast({
+                                      title: 'Error',
+                                      description: 'Failed to complete upload',
+                                      variant: 'destructive'
+                                    });
+                                    return;
+                                  }
+                                  
+                                  const { objectPath } = await completeResponse.json();
+                                  
+                                  // Update the form field with the uploaded image URL
+                                  field.onChange(objectPath);
+                                  
+                                  toast({
+                                    title: 'Success',
+                                    description: 'Image uploaded successfully'
+                                  });
+                                }
+                              }}
+                              buttonClassName="w-full"
+                            >
+                              <div className="flex items-center justify-center gap-2">
+                                <Upload className="h-4 w-4" />
+                                <span>Upload Image</span>
+                              </div>
+                            </ObjectUploader>
+                            
+                            {/* Image Preview */}
+                            {field.value && (
+                              <div className="relative rounded-lg border overflow-hidden">
+                                <img
+                                  src={field.value}
+                                  alt="Featured image preview"
+                                  className="w-full h-32 object-cover"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  className="absolute top-2 right-2"
+                                  onClick={() => field.onChange('')}
+                                  data-testid="button-remove-image"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         </FormControl>
                         <FormMessage />

@@ -44,6 +44,11 @@ import {
   getEAMimeType,
   FILE_TYPES
 } from "./file-utils";
+import {
+  ObjectStorageService,
+  ObjectNotFoundError,
+} from "./objectStorage";
+import { ObjectPermission } from "./objectAcl";
 
 // Dynamic storage selection based on database availability
 let storage: IStorage = memStorage;
@@ -3109,6 +3114,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error deleting signal:", error);
       res.status(500).json({ error: "Failed to delete signal", message: error.message });
+    }
+  });
+
+  // ==================== OBJECT STORAGE ROUTES ====================
+  
+  // POST /api/admin/upload - Get presigned URL for direct upload to object storage
+  app.post("/api/admin/upload", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL });
+    } catch (error: any) {
+      console.error("Error getting upload URL:", error);
+      res.status(500).json({ error: "Failed to get upload URL", message: error.message });
+    }
+  });
+
+  // POST /api/admin/upload/complete - After upload is complete, set ACL and return normalized path
+  app.post("/api/admin/upload/complete", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      if (!req.body.uploadURL) {
+        return res.status(400).json({ error: "uploadURL is required" });
+      }
+
+      const userId = req.user?.id || 'admin';
+      const objectStorageService = new ObjectStorageService();
+      
+      // Set ACL policy to make the image public (for blog post featured images)
+      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
+        req.body.uploadURL,
+        {
+          owner: userId,
+          visibility: "public", // Public for blog post images
+          aclRules: []
+        }
+      );
+
+      res.status(200).json({
+        success: true,
+        objectPath: objectPath,
+        // Construct the public URL for the image
+        publicUrl: objectPath
+      });
+    } catch (error: any) {
+      console.error("Error setting ACL policy:", error);
+      res.status(500).json({ error: "Failed to complete upload", message: error.message });
+    }
+  });
+
+  // GET /objects/:objectPath(*) - Serve uploaded objects (public or private)
+  app.get("/objects/:objectPath(*)", async (req: Request, res: Response) => {
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(req.path);
+      
+      // Check if object is public or user has access
+      const canAccess = await objectStorageService.canAccessObjectEntity({
+        objectFile,
+        userId: req.user?.id,
+        requestedPermission: ObjectPermission.READ,
+      });
+      
+      if (!canAccess) {
+        return res.sendStatus(401);
+      }
+      
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error serving object:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.sendStatus(404);
+      }
+      return res.sendStatus(500);
+    }
+  });
+
+  // GET /public-objects/:filePath(*) - Serve public assets from object storage
+  app.get("/public-objects/:filePath(*)", async (req: Request, res: Response) => {
+    const filePath = req.params.filePath;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const file = await objectStorageService.searchPublicObject(filePath);
+      if (!file) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      objectStorageService.downloadObject(file, res);
+    } catch (error) {
+      console.error("Error searching for public object:", error);
+      return res.status(500).json({ error: "Internal server error" });
     }
   });
 
