@@ -2325,7 +2325,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         where.categoryId = Number(categoryId);
       }
 
-      const [blogs, total] = await Promise.all([
+      const [blogs, total, totalBlogs, publishedBlogs, draftBlogs, totalViewsResult] = await Promise.all([
         prisma.blog.findMany({
           where,
           skip,
@@ -2345,7 +2345,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         }),
-        prisma.blog.count({ where })
+        prisma.blog.count({ where }),
+        prisma.blog.count(),
+        prisma.blog.count({ where: { status: 'published' } }),
+        prisma.blog.count({ where: { status: 'draft' } }),
+        prisma.blog.aggregate({ _sum: { views: true } })
       ]);
 
       // Format blogs data
@@ -2370,7 +2374,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         data: formattedBlogs,
         total,
         page: Number(page),
-        totalPages: Math.ceil(total / Number(limit))
+        totalPages: Math.ceil(total / Number(limit)),
+        stats: {
+          total: totalBlogs,
+          published: publishedBlogs,
+          drafts: draftBlogs,
+          totalViews: totalViewsResult._sum.views || 0
+        }
       });
     } catch (error) {
       console.error("Error fetching admin blogs:", error);
