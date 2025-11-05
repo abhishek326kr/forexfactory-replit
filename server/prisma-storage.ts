@@ -719,6 +719,20 @@ export class PrismaStorage implements IStorage {
       const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = options;
       const skip = (page - 1) * limit;
       
+      // Map sortBy field to valid Signal model fields
+      let orderByField = 'createdAt';
+      if (sortBy === 'downloadCount' || sortBy === 'popular') {
+        // Since Signal doesn't have downloadCount, use createdAt as default
+        orderByField = 'createdAt';
+      } else if (sortBy === 'name' || sortBy === 'title') {
+        orderByField = 'title';
+      } else if (sortBy === 'rating') {
+        // Since Signal doesn't have rating, use createdAt as default
+        orderByField = 'createdAt';
+      } else if (['id', 'uuid', 'title', 'description', 'filePath', 'mime', 'sizeBytes', 'createdAt'].includes(sortBy)) {
+        orderByField = sortBy;
+      }
+      
       const where: any = {};
       if (filters) {
         // Signal model only has basic fields, remove filters for non-existent fields
@@ -730,7 +744,7 @@ export class PrismaStorage implements IStorage {
           where,
           skip,
           take: limit,
-          orderBy: { [sortBy]: sortOrder }
+          orderBy: { [orderByField]: sortOrder }
         }),
         prisma.signal.count({ where })
       ]);
