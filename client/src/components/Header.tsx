@@ -13,7 +13,6 @@ export default function Header() {
   const navLinks = [
     { href: '/', label: 'Home', icon: null },
     { href: '/blog', label: 'Blog', icon: BookOpen },
-    { href: '/downloads', label: 'Downloads', icon: Download },
     { href: '/category/indicators', label: 'Indicators', icon: TrendingUp },
     { href: '/category/expert-advisors', label: 'Expert Advisors', icon: null },
   ];

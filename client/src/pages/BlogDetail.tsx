@@ -5,6 +5,7 @@ import { Calendar, Clock, Eye, User, Tag, ArrowLeft, Share2, Facebook, Twitter, 
 import Layout from '@/components/Layout';
 import SEOHead from '@/components/SEOHead';
 import BlogCard from '@/components/BlogCard';
+import TimedDownloadButton from '@/components/TimedDownloadButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -227,7 +228,19 @@ export default function BlogDetail() {
                   data-testid="blog-content"
                 />
                 
-                <Separator className="my-8" />
+                {/* Download Button */}
+                {blog.downloadLink && (
+                  <div className="my-12">
+                    <Separator className="mb-8" />
+                    <TimedDownloadButton 
+                      downloadLink={blog.downloadLink}
+                      fileName={blog.title || 'EA File'}
+                    />
+                    <Separator className="mt-8" />
+                  </div>
+                )}
+                
+                {!blog.downloadLink && <Separator className="my-8" />}
                 
                 {/* Social Share */}
                 <div className="flex items-center justify-between mb-8">

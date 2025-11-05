@@ -12,9 +12,6 @@ import Home from "@/pages/Home";
 import Blog from "@/pages/Blog";
 import BlogEnhanced from "@/pages/BlogEnhanced";
 import BlogDetail from "@/pages/BlogDetail";
-import Downloads from "@/pages/Downloads";
-import DownloadsEnhanced from "@/pages/DownloadsEnhanced";
-import SignalDetail from "@/pages/SignalDetail";
 import Category from "@/pages/Category";
 import Search from "@/pages/Search";
 import SearchResults from "@/pages/SearchResults";
@@ -27,16 +24,12 @@ import Login from "@/pages/Login";
 // Import admin pages
 import AdminDashboard from "@/pages/Admin/Dashboard";
 import BlogList from "@/pages/Admin/BlogList";
-import SignalList from "@/pages/Admin/SignalList";
-import SignalEditor from "@/pages/Admin/SignalEditor";
-import SignalUploader from "@/pages/Admin/SignalUploader";
 import CategoryList from "@/pages/Admin/CategoryList";
 import UserList from "@/pages/Admin/UserList";
 import MediaManager from "@/pages/Admin/MediaManager";
 import SeoManager from "@/pages/Admin/SeoManager";
 import Analytics from "@/pages/Admin/Analytics";
 import PostEditor from "@/pages/Admin/PostEditor";
-import DownloadManager from "@/pages/Admin/DownloadManager";
 import Settings from "@/pages/Admin/Settings";
 
 function Router() {
@@ -46,8 +39,6 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/blog" component={BlogEnhanced} />
       <Route path="/blog/:slug" component={BlogDetail} />
-      <Route path="/downloads" component={DownloadsEnhanced} />
-      <Route path="/download/:id" component={SignalDetail} />
       <Route path="/category/:category" component={BlogEnhanced} />
       <Route path="/search" component={SearchResults} />
       <Route path="/about" component={About} />
@@ -77,28 +68,6 @@ function Router() {
       <Route path="/admin/blogs/edit/:id">
         <ProtectedRoute requireAdmin={true}>
           <PostEditor />
-        </ProtectedRoute>
-      </Route>
-      
-      {/* Signal/EA Management */}
-      <Route path="/admin/add-signal">
-        <ProtectedRoute requireAdmin={true}>
-          <SignalUploader />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/admin/signals">
-        <ProtectedRoute requireAdmin={true}>
-          <SignalList />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/admin/signals/new">
-        <ProtectedRoute requireAdmin={true}>
-          <SignalEditor />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/admin/signals/edit/:id">
-        <ProtectedRoute requireAdmin={true}>
-          <SignalEditor />
         </ProtectedRoute>
       </Route>
       
@@ -145,11 +114,6 @@ function Router() {
       </Route>
       
       {/* Legacy routes for compatibility */}
-      <Route path="/admin/downloads">
-        <ProtectedRoute requireAdmin={true}>
-          <DownloadManager />
-        </ProtectedRoute>
-      </Route>
       <Route path="/admin/editor">
         <ProtectedRoute requireAdmin={true}>
           <PostEditor />

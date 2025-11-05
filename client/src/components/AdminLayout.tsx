@@ -60,11 +60,6 @@ const navItems: NavItem[] = [
     icon: FileText
   },
   {
-    title: 'Signals/EAs',
-    href: '/admin/signals',
-    icon: Bot
-  },
-  {
     title: 'Categories',
     href: '/admin/categories',
     icon: FolderOpen
