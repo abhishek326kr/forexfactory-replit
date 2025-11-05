@@ -25,7 +25,7 @@ import { generateOptimizedTitle, generateOptimizedMetaDescription, LONG_TAIL_KEY
 // Helper to sync filters with URL
 function useUrlFilters() {
   const [location, setLocation] = useLocation();
-  const params = new URLSearchParams(location.split('?')[1] || '');
+  const params = new URLSearchParams(location ? location.split('?')[1] || '' : '');
 
   const getFilters = () => {
     return {
@@ -57,7 +57,7 @@ function useUrlFilters() {
       }
     });
 
-    const basePath = location.split('?')[0];
+    const basePath = location ? location.split('?')[0] : '/downloads';
     const queryString = params.toString();
     setLocation(queryString ? `${basePath}?${queryString}` : basePath);
   };
@@ -66,6 +66,7 @@ function useUrlFilters() {
 }
 
 export default function DownloadsEnhanced() {
+  const [location] = useLocation();
   const [filters, setFilters] = useUrlFilters();
   const [searchInput, setSearchInput] = useState(filters.search);
   const [selectedStrategies, setSelectedStrategies] = useState<string[]>(filters.strategy);
@@ -464,7 +465,7 @@ export default function DownloadsEnhanced() {
         title={pageTitle}
         description={metaDescription}
         keywords={LONG_TAIL_KEYWORDS.slice(0, 10).join(', ')}
-        path={location}
+        path={location || '/downloads'}
         ogType="website"
       />
       
@@ -629,7 +630,21 @@ export default function DownloadsEnhanced() {
                   <>
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                       {downloadsData.data.map((signal: any) => (
-                        <DownloadCard key={signal.id} signal={signal} />
+                        <DownloadCard 
+                          key={signal.id}
+                          id={signal.id || signal.uuid}
+                          name={signal.title || 'Unnamed EA'}
+                          description={signal.description || 'No description available'}
+                          version={signal.version || '1.0.0'}
+                          compatibility={signal.platform || 'MT4'}
+                          downloads={signal.downloadCount || 0}
+                          rating={signal.rating || 4.5}
+                          lastUpdated={signal.createdAt || new Date().toISOString()}
+                          image={signal.image || '/default-ea-image.jpg'}
+                          fileSize={signal.sizeBytes ? `${(signal.sizeBytes / 1024 / 1024).toFixed(2)} MB` : '0 MB'}
+                          isPremium={signal.isPremium || false}
+                          features={signal.features || []}
+                        />
                       ))}
                     </div>
                     
