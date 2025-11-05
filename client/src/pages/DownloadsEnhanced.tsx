@@ -424,7 +424,7 @@ export default function DownloadsEnhanced() {
             <SelectValue placeholder="Any version" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Any version</SelectItem>
+            <SelectItem value="all">Any version</SelectItem>
             <SelectItem value="1.0">v1.0+</SelectItem>
             <SelectItem value="2.0">v2.0+</SelectItem>
             <SelectItem value="3.0">v3.0+</SelectItem>
