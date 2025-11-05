@@ -175,15 +175,32 @@ export default function PostEditor() {
 
   // Generate slug from title
   const generateSlug = (title: string) => {
+    if (!title) return '';
     const slug = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
-    form.setValue('seoSlug', slug);
+    return slug;
   };
 
   const onSubmit = async (data: PostFormData, status: 'draft' | 'published') => {
-    await saveMutation.mutateAsync({ ...data, status });
+    // Ensure slug is set
+    let submitData = { ...data, status };
+    if (!submitData.seoSlug && submitData.title) {
+      submitData.seoSlug = generateSlug(submitData.title);
+    }
+    
+    // Ensure metaRobots has a default value
+    if (!submitData.metaRobots) {
+      submitData.metaRobots = 'index_follow';
+    }
+    
+    // Ensure featuredImage is a string, not an array
+    if (Array.isArray(submitData.featuredImage)) {
+      submitData.featuredImage = submitData.featuredImage[0] || '';
+    }
+    
+    await saveMutation.mutateAsync(submitData);
   };
 
   if (postLoading) {
@@ -226,10 +243,11 @@ export default function PostEditor() {
                             data-testid="input-title"
                             onBlur={(e) => {
                               field.onBlur();
-                              if (!form.getValues('seoSlug')) {
-                                generateSlug(e.target.value);
+                              if (!form.getValues('seoSlug') && e.target.value) {
+                                const slug = generateSlug(e.target.value);
+                                form.setValue('seoSlug', slug);
                               }
-                              if (!form.getValues('seoTitle')) {
+                              if (!form.getValues('seoTitle') && e.target.value) {
                                 form.setValue('seoTitle', e.target.value.substring(0, 60));
                               }
                             }}
