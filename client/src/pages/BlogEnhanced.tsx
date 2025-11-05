@@ -385,7 +385,7 @@ export default function BlogEnhanced() {
         title={pageTitle}
         description={metaDescription}
         keywords={LONG_TAIL_KEYWORDS.slice(0, 10).join(', ')}
-        path={location}
+        path={String(location)}
         ogType="website"
       />
       
@@ -487,7 +487,7 @@ export default function BlogEnhanced() {
                 {categories && (
                   <CategoryFilter 
                     categories={categories as any} 
-                    selectedCategory={filters.category}
+                    selectedCategory={filters.category || ''}
                   />
                 )}
                 
@@ -546,7 +546,19 @@ export default function BlogEnhanced() {
                   <>
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                       {postsData.data.map((post: any) => (
-                        <BlogCard key={post.id} post={post} />
+                        <BlogCard 
+                          key={post.id} 
+                          id={post.id}
+                          title={post.title || ''}
+                          excerpt={post.content ? post.content.substring(0, 150) + '...' : ''}
+                          category={post.category || 'General'}
+                          author={post.author || 'Admin'}
+                          date={post.createdAt || new Date().toISOString()}
+                          readTime={5}
+                          image={post.featuredImage || '/default-blog-image.jpg'}
+                          slug={post.seoSlug || post.id}
+                          tags={post.tags ? (typeof post.tags === 'string' ? post.tags.split(',') : post.tags) : []}
+                        />
                       ))}
                     </div>
                     
