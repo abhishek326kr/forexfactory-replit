@@ -154,6 +154,7 @@ export interface IStorage {
   getAllMedia(options?: PaginationOptions): Promise<PaginatedResult<Media>>;
   getMediaByType(fileType: string, options?: PaginationOptions): Promise<PaginatedResult<Media>>;
   searchMedia(query: string, options?: PaginationOptions): Promise<PaginatedResult<Media>>;
+  uploadFile(file: { filename: string; filepath: string; size: number; mimetype: string; uploadedBy: number }): Promise<Media>;
 
   // ============================================
   // POST MANAGEMENT (separate from blogs)

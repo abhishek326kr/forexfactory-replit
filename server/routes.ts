@@ -1544,32 +1544,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Admin access required" });
       }
       
-      const { name, description } = req.body;
-      
-      // Check if category already exists
-      const existingCategory = await prisma.category.findFirst({
-        where: { name }
-      });
-      
-      if (existingCategory) {
-        return res.status(400).json({ error: "Category already exists" });
-      }
-      
-      const category = await prisma.category.create({
-        data: {
-          name,
-          description: description || null,
-          status: 'active'
-        }
-      });
+      const validatedData = insertCategorySchema.parse(req.body);
+      const category = await storage.createCategory(validatedData);
       
       res.status(201).json({
         id: category.categoryId.toString(),
         name: category.name,
-        slug: category.name.toLowerCase().replace(/\s+/g, '-'),
-        description: category.description
+        slug: category.slug || category.name.toLowerCase().replace(/\s+/g, '-'),
+        description: category.description,
+        status: category.status
       });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: fromZodError(error).message });
+      }
       console.error("Error creating category:", error);
       res.status(500).json({ error: "Failed to create category" });
     }
@@ -2398,7 +2386,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } = req.body;
 
       // Generate slug if not provided
-      const slug = seoSlug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      let slug = seoSlug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      
+      // Ensure slug uniqueness
+      let slugSuffix = 0;
+      let finalSlug = slug;
+      while (true) {
+        const existing = await storage.getBlogBySlug(finalSlug);
+        if (!existing) break;
+        slugSuffix++;
+        finalSlug = `${slug}-${slugSuffix}`;
+      }
+      slug = finalSlug;
 
       // Use storage layer instead of direct Prisma
       const blogData = {
@@ -2406,13 +2405,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content,
         author: author || req.user?.username || 'Admin',
         seoSlug: slug,
-        status: status as BlogStatus,
+        status: (status || 'draft') as BlogStatus,
         featuredImage: featuredImage || '',
         categoryId: categoryId ? Number(categoryId) : 1,
         tags: tags || '',
-        downloadLink,
-        views: 0,
-        createdAt: new Date()
+        downloadLink: downloadLink || null,
+        views: 0
       };
 
       // Create blog using storage layer
@@ -3460,25 +3458,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== MEDIA ENDPOINTS ====================
   
   // POST /api/admin/media/upload - Upload media file (admin only)
-  app.post("/api/admin/media/upload", [requireAdmin, uploadLimiter], async (req: Request, res: Response) => {
-    try {
-      const parseResult = insertMediaSchema.safeParse({
-        ...req.body,
-        uploadedBy: parseInt(req.user!.id)
-      });
-      
-      if (!parseResult.success) {
-        const error = fromZodError(parseResult.error);
-        return res.status(400).json({ error: "Validation failed", details: error.message });
+  app.post("/api/admin/media/upload", 
+    requireAdmin,
+    uploadLimiter,
+    mediaUpload.single('file'),
+    async (req: Request, res: Response) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ error: "No file uploaded" });
+        }
+        
+        const file = req.file;
+        const userId = parseInt(req.user?.id || '1');
+        
+        // Save file info to database using storage layer
+        const mediaData = await storage.uploadFile({
+          filename: file.filename,
+          filepath: `/uploads/media/${file.filename}`,
+          size: file.size,
+          mimetype: file.mimetype,
+          uploadedBy: userId
+        });
+        
+        res.status(201).json({ 
+          success: true,
+          data: {
+            id: mediaData.id,
+            fileName: mediaData.fileName,
+            filePath: mediaData.filePath,
+            uploadedAt: mediaData.uploadedAt,
+            url: `/uploads/media/${file.filename}`
+          }
+        });
+      } catch (error: any) {
+        console.error("Error uploading media:", error);
+        res.status(500).json({ error: "Failed to upload media", message: error.message });
       }
-      
-      const media = await storage.createMedia(parseResult.data);
-      res.status(201).json({ success: true, data: media });
-    } catch (error: any) {
-      console.error("Error uploading media:", error);
-      res.status(500).json({ error: "Failed to upload media", message: error.message });
     }
-  });
+  );
 
   // GET /api/admin/media - List media files (admin only)
   app.get("/api/admin/media", requireAdmin, async (req: Request, res: Response) => {

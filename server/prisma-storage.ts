@@ -830,9 +830,27 @@ export class PrismaStorage implements IStorage {
   // ============================================
   async createCategory(insertCategory: InsertCategory): Promise<Category> {
     try {
+      // Generate slug from name if not provided
+      let slug = insertCategory.slug || insertCategory.name.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      
+      // Ensure slug uniqueness
+      let slugSuffix = 0;
+      let finalSlug = slug;
+      while (true) {
+        const existing = await prisma.category.findFirst({
+          where: { slug: finalSlug }
+        });
+        if (!existing) break;
+        slugSuffix++;
+        finalSlug = `${slug}-${slugSuffix}`;
+      }
+      
       const category = await prisma.category.create({
         data: {
           ...insertCategory,
+          slug: finalSlug,
           status: insertCategory.status || 'active'
         }
       });
@@ -1129,9 +1147,7 @@ export class PrismaStorage implements IStorage {
       const seoMeta = await prisma.seoMeta.create({
         data: {
           ...insertSeoMeta,
-          metaRobots: insertSeoMeta.metaRobots || 'index, follow',
-          schemaType: 'Article',
-          twitterCard: 'summary_large_image'
+          metaRobots: insertSeoMeta.metaRobots || 'index_follow'
         }
       });
       return seoMeta as SeoMeta;
@@ -1384,6 +1400,22 @@ export class PrismaStorage implements IStorage {
       ]);
       
       return buildPaginatedResult(data as Media[], total, page, limit);
+    } catch (error) {
+      handlePrismaError(error);
+    }
+  }
+
+  async uploadFile(file: { filename: string; filepath: string; size: number; mimetype: string; uploadedBy: number }): Promise<Media> {
+    try {
+      const media = await prisma.media.create({
+        data: {
+          fileName: file.filename,
+          filePath: file.filepath,
+          uploadedBy: file.uploadedBy,
+          uploadedAt: new Date()
+        }
+      });
+      return media as Media;
     } catch (error) {
       handlePrismaError(error);
     }
