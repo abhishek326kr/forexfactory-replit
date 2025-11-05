@@ -2417,15 +2417,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Use storage layer instead of direct Prisma
       const blogData = {
-        title,
-        content,
+        title: title || '',
+        content: content || '',
         author: author || req.user?.username || 'Admin',
         seoSlug: slug,
         status: (status || 'draft') as BlogStatus,
-        featuredImage: featuredImage || '',
-        categoryId: categoryId ? Number(categoryId) : 1,
-        tags: tags || '',
-        downloadLink: downloadLink || null,
+        featuredImage: String(featuredImage || ''),
+        categoryId: categoryId ? parseInt(categoryId.toString()) : 1,
+        tags: String(tags || ''),
+        downloadLink: downloadLink ? String(downloadLink) : null,
         views: 0
       };
 
