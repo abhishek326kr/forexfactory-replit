@@ -6,7 +6,8 @@ import { connectDB } from "./db";
 const app = express();
 
 // Trust proxy in Replit environment to properly handle X-Forwarded headers
-app.set('trust proxy', true);
+// Use specific number (1) to trust only first proxy in chain
+app.set('trust proxy', 1);
 
 declare module 'http' {
   interface IncomingMessage {

@@ -146,24 +146,7 @@ passport.use(new LocalStrategy(
     console.log('🔑 Passport strategy called with email:', email);
     
     try {
-      // Development fallback for testing when database is not available
-      if (process.env.NODE_ENV !== 'production' && email === 'admin@example.com' && password === 'password123') {
-        console.log('⚠️ Using development fallback admin user (database not connected)');
-        const testUser: User = {
-          id: '1',
-          email: 'admin@example.com',
-          username: 'admin',
-          password: await bcrypt.hash('password123', 10),
-          role: 'admin',
-          avatar: null,
-          bio: null,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        return done(null, testUser);
-      }
-      
-      // Try to find admin by email or username
+      // Try to find admin by email or username FIRST
       console.log('🔍 Searching for admin with email/username:', email);
       const admin = await prisma.admin.findFirst({
         where: {
