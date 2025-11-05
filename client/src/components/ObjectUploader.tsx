@@ -1,12 +1,9 @@
-import { useState, useEffect, useRef } from "react";
-import type { ReactNode } from "react";
-import Uppy from "@uppy/core";
-import DashboardPlugin from "@uppy/dashboard";
-// Dashboard will use its own inline styles
-import AwsS3 from "@uppy/aws-s3";
-import type { UploadResult } from "@uppy/core";
+import { useState } from "react";
+import type { ReactNode, ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
+import { Upload, X, CheckCircle2, AlertCircle } from "lucide-react";
 
 interface ObjectUploaderProps {
   maxNumberOfFiles?: number;
@@ -15,42 +12,20 @@ interface ObjectUploaderProps {
     method: "PUT";
     url: string;
   }>;
-  onComplete?: (
-    result: UploadResult<Record<string, unknown>, Record<string, unknown>>
-  ) => void;
+  onComplete?: (result: { 
+    successful: Array<{ 
+      uploadURL: string; 
+      response?: { body: { url: string } } 
+    }> 
+  }) => void;
   buttonClassName?: string;
   children: ReactNode;
   disabled?: boolean;
 }
 
 /**
- * A file upload component that renders as a button and provides a modal interface for
- * file management.
- * 
- * Features:
- * - Renders as a customizable button that opens a file upload modal
- * - Provides a modal interface for:
- *   - File selection
- *   - File preview
- *   - Upload progress tracking
- *   - Upload status display
- * 
- * The component uses Uppy under the hood to handle all file upload functionality.
- * All file management features are automatically handled by the Uppy dashboard modal.
- * 
- * @param props - Component props
- * @param props.maxNumberOfFiles - Maximum number of files allowed to be uploaded
- *   (default: 1)
- * @param props.maxFileSize - Maximum file size in bytes (default: 10MB)
- * @param props.onGetUploadParameters - Function to get upload parameters (method and URL).
- *   Typically used to fetch a presigned URL from the backend server for direct-to-S3
- *   uploads.
- * @param props.onComplete - Callback function called when upload is complete. Typically
- *   used to make post-upload API calls to update server state and set object ACL
- *   policies.
- * @param props.buttonClassName - Optional CSS class name for the button
- * @param props.children - Content to be rendered inside the button
- * @param props.disabled - Whether the button is disabled
+ * A simple file upload component that provides a clean interface for image uploads
+ * without external dependencies that cause issues.
  */
 export function ObjectUploader({
   maxNumberOfFiles = 1,
@@ -62,44 +37,114 @@ export function ObjectUploader({
   disabled = false,
 }: ObjectUploaderProps) {
   const [showModal, setShowModal] = useState(false);
-  const dashboardRef = useRef<HTMLDivElement>(null);
-  const [uppy] = useState(() =>
-    new Uppy({
-      restrictions: {
-        maxNumberOfFiles,
-        maxFileSize,
-        allowedFileTypes: ['image/*'], // Only allow images for featured images
-      },
-      autoProceed: false,
-    })
-      .use(DashboardPlugin, {
-        inline: true,
-        target: null,
-        proudlyDisplayPoweredByUppy: false,
-        height: 500,
-        width: '100%',
-      })
-      .use(AwsS3, {
-        shouldUseMultipart: false,
-        getUploadParameters: onGetUploadParameters,
-      })
-      .on("complete", (result) => {
-        onComplete?.(result);
-        setShowModal(false);
-      })
-  );
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [error, setError] = useState<string>("");
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
-  // Mount/unmount the Dashboard when modal opens/closes
-  useEffect(() => {
-    if (showModal && dashboardRef.current) {
-      const dashboard = uppy.getPlugin('Dashboard') as any;
-      if (dashboard) {
-        dashboard.setOptions({
-          target: dashboardRef.current,
-        });
-      }
+  const handleFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size
+    if (file.size > maxFileSize) {
+      setError(`File size must be less than ${(maxFileSize / 1048576).toFixed(1)}MB`);
+      return;
     }
-  }, [showModal, uppy]);
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file');
+      return;
+    }
+
+    setError("");
+    setSelectedFile(file);
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+
+    setUploading(true);
+    setUploadProgress(0);
+    setError("");
+
+    try {
+      // Get upload parameters
+      const params = await onGetUploadParameters();
+      
+      // Create form data
+      const xhr = new XMLHttpRequest();
+      
+      // Track upload progress
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = (event.loaded / event.total) * 100;
+          setUploadProgress(Math.round(percentComplete));
+        }
+      });
+
+      // Handle completion
+      xhr.onload = function() {
+        if (xhr.status === 200 || xhr.status === 204) {
+          setUploadSuccess(true);
+          // Simulate the Uppy result structure
+          const result = {
+            successful: [{
+              uploadURL: params.url,
+              response: { body: { url: params.url.split('?')[0] } }
+            }]
+          };
+          onComplete?.(result);
+          
+          // Close modal after short delay
+          setTimeout(() => {
+            setShowModal(false);
+            resetState();
+          }, 1000);
+        } else {
+          setError('Upload failed. Please try again.');
+        }
+        setUploading(false);
+      };
+
+      xhr.onerror = function() {
+        setError('Upload failed. Please try again.');
+        setUploading(false);
+      };
+
+      // Send the file
+      xhr.open(params.method, params.url);
+      xhr.setRequestHeader('Content-Type', selectedFile.type);
+      xhr.send(selectedFile);
+      
+    } catch (err) {
+      setError('Failed to upload file. Please try again.');
+      setUploading(false);
+    }
+  };
+
+  const resetState = () => {
+    setSelectedFile(null);
+    setPreview("");
+    setUploadProgress(0);
+    setError("");
+    setUploadSuccess(false);
+  };
+
+  const handleClose = () => {
+    setShowModal(false);
+    resetState();
+  };
 
   return (
     <div>
@@ -114,13 +159,111 @@ export function ObjectUploader({
         {children}
       </Button>
 
-      {showModal && (
-        <Dialog open={showModal} onOpenChange={setShowModal}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
-            <div ref={dashboardRef} />
-          </DialogContent>
-        </Dialog>
-      )}
+      <Dialog open={showModal} onOpenChange={handleClose}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Upload Image</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* File Input */}
+            <div className="border-2 border-dashed rounded-lg p-6 text-center">
+              {!selectedFile ? (
+                <div>
+                  <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <label htmlFor="file-upload" className="cursor-pointer">
+                    <span className="text-primary hover:underline">Choose an image</span>
+                    <span className="text-muted-foreground"> or drag and drop</span>
+                  </label>
+                  <input
+                    id="file-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    data-testid="input-file-upload"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    PNG, JPG, GIF up to {(maxFileSize / 1048576).toFixed(0)}MB
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Preview */}
+                  {preview && (
+                    <img 
+                      src={preview} 
+                      alt="Preview" 
+                      className="mx-auto max-h-64 rounded"
+                    />
+                  )}
+                  
+                  {/* File info */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm truncate flex-1">
+                      {selectedFile.name}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={resetState}
+                      disabled={uploading}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {/* Upload progress */}
+                  {uploading && (
+                    <div className="space-y-2">
+                      <Progress value={uploadProgress} />
+                      <p className="text-xs text-center text-muted-foreground">
+                        Uploading... {uploadProgress}%
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Success message */}
+                  {uploadSuccess && (
+                    <div className="flex items-center justify-center text-green-600">
+                      <CheckCircle2 className="h-5 w-5 mr-2" />
+                      <span>Upload successful!</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Error message */}
+            {error && (
+              <div className="flex items-center text-red-600 text-sm">
+                <AlertCircle className="h-4 w-4 mr-2" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                disabled={uploading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleUpload}
+                disabled={!selectedFile || uploading || uploadSuccess}
+              >
+                {uploading ? 'Uploading...' : 'Upload'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
