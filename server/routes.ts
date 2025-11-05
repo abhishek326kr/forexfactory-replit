@@ -2262,8 +2262,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         prisma.comment.count(),
         prisma.category.count(),
         prisma.signal.count(),
-        prisma.signal.count({ where: { isActive: true } }),
-        prisma.signal.aggregate({ _sum: { downloadCount: true } })
+        prisma.signal.count(),  // Changed: removed isActive filter as Signal doesn't have this field
+        prisma.signal.aggregate({ _sum: { sizeBytes: true } })  // Changed: using sizeBytes instead of downloadCount
       ]);
 
       const stats = {
