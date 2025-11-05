@@ -17,6 +17,7 @@ import Search from "@/pages/Search";
 import SearchResults from "@/pages/SearchResults";
 import About from "@/pages/About";
 import Contact from "@/pages/Contact";
+import Signals from "@/pages/Signals";
 
 // Import authentication pages
 import Login from "@/pages/Login";
@@ -40,6 +41,7 @@ function Router() {
       <Route path="/blog" component={BlogEnhanced} />
       <Route path="/blog/:slug" component={BlogDetail} />
       <Route path="/category/:category" component={BlogEnhanced} />
+      <Route path="/signals" component={Signals} />
       <Route path="/search" component={SearchResults} />
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />
