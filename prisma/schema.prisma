@@ -120,7 +120,10 @@ model Post {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  author           User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author           User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  seoAutomations   SeoAutomation[]
+  indexingLogs     IndexingLog[]
+  serpPreview      SerpPreview?
 
   @@map("posts")
 }
@@ -208,4 +211,104 @@ enum UserRole {
   admin
   editor
   viewer
+}
+
+// SEO Automation Models
+model SeoTemplate {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique @db.VarChar(100)
+  type        String   @db.VarChar(50) // meta_title, meta_description, schema, etc.
+  template    String   @db.Text
+  variables   String?  @db.Text // JSON array of available variables
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("seo_templates")
+}
+
+model SeoAutomation {
+  id               Int      @id @default(autoincrement())
+  postId           Int?     @map("post_id")
+  taskType         String   @db.VarChar(50) // meta_generation, schema_generation, alt_text, indexing
+  status           String   @default("pending") @db.VarChar(20) // pending, processing, completed, failed
+  input            String?  @db.Text // JSON input data
+  output           String?  @db.Text // JSON output/result
+  error            String?  @db.Text
+  processedAt      DateTime? @map("processed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  post             Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId], name: "post_id_idx")
+  @@index([status], name: "status_idx")
+  @@map("seo_automations")
+}
+
+model IndexingLog {
+  id          Int      @id @default(autoincrement())
+  postId      Int?     @map("post_id")
+  url         String   @db.VarChar(500)
+  service     String   @db.VarChar(50) // google, bing, yahoo
+  action      String   @db.VarChar(50) // submit, update, delete
+  status      String   @db.VarChar(20) // success, failed, pending
+  response    String?  @db.Text // API response
+  error       String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  post        Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId], name: "indexing_post_id_idx")
+  @@index([service, status], name: "service_status_idx")
+  @@map("indexing_logs")
+}
+
+model SerpPreview {
+  id          Int      @id @default(autoincrement())
+  postId      Int      @unique @map("post_id")
+  googleTitle String?  @db.VarChar(60) @map("google_title")
+  googleDesc  String?  @db.VarChar(160) @map("google_description")
+  bingTitle   String?  @db.VarChar(60) @map("bing_title")
+  bingDesc    String?  @db.VarChar(160) @map("bing_description")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("serp_previews")
+}
+
+model NewsletterSubscription {
+  id              Int       @id @default(autoincrement())
+  email           String    @unique @db.VarChar(255)
+  status          String    @default("pending") @db.VarChar(20) // pending, confirmed, unsubscribed
+  confirmToken    String?   @unique @map("confirm_token") @db.VarChar(255)
+  unsubscribeToken String?  @unique @map("unsubscribe_token") @db.VarChar(255)
+  subscribedAt    DateTime? @map("subscribed_at")
+  confirmedAt     DateTime? @map("confirmed_at")
+  unsubscribedAt  DateTime? @map("unsubscribed_at")
+  lastEmailSentAt DateTime? @map("last_email_sent_at")
+  bounceCount     Int       @default(0) @map("bounce_count")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([status], name: "subscription_status_idx")
+  @@map("newsletter_subscriptions")
+}
+
+model EmailLog {
+  id              Int      @id @default(autoincrement())
+  recipient       String   @db.VarChar(255)
+  subject         String   @db.VarChar(500)
+  templateKey     String?  @map("template_key") @db.VarChar(100)
+  status          String   @db.VarChar(20) // sent, failed, bounced, opened, clicked
+  messageId       String?  @map("message_id") @db.VarChar(255)
+  error           String?  @db.Text
+  metadata        String?  @db.Text // JSON metadata
+  sentAt          DateTime? @map("sent_at")
+  openedAt        DateTime? @map("opened_at")
+  clickedAt       DateTime? @map("clicked_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([recipient], name: "email_recipient_idx")
+  @@index([status], name: "email_status_idx")
+  @@map("email_logs")
 }
