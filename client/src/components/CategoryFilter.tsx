@@ -35,7 +35,7 @@ export default function CategoryFilter({
           variant={selectedCategory === category ? 'default' : 'outline'}
           className="cursor-pointer px-4 py-1.5 hover-elevate active-elevate-2"
           onClick={() => onCategoryChange(category)}
-          data-testid={`badge-category-${category.toLowerCase()}`}
+          data-testid={`badge-category-${typeof category === 'string' ? category.toLowerCase().replace(/\s+/g, '-') : 'category'}`}
         >
           {category}
         </Badge>

@@ -486,7 +486,10 @@ export default function BlogEnhanced() {
                 {/* Categories */}
                 {categories && (
                   <CategoryFilter 
-                    categories={categories as any} 
+                    categories={Array.isArray(categories) 
+                      ? categories.map((cat: any) => cat.name || cat)
+                      : []
+                    } 
                     selectedCategory={filters.category || ''}
                   />
                 )}
