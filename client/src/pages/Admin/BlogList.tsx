@@ -202,7 +202,7 @@ export default function BlogList() {
     }
   };
 
-  const blogs = blogsData?.blogs || [];
+  const blogs = blogsData?.data || blogsData?.blogs || [];
   const totalPages = Math.ceil((blogsData?.total || 0) / itemsPerPage);
 
   return (
