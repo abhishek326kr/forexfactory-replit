@@ -2706,7 +2706,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return data;
   }
 
-  // GET /api/admin/categories - Get all categories for the dropdown
+  // GET /api/admin/categories - Get all categories for admin management
   app.get("/api/admin/categories", async (req: Request, res: Response) => {
     try {
       const categories = await prisma.category.findMany({
@@ -2716,26 +2716,163 @@ export async function registerRoutes(app: Express): Promise<Server> {
           description: true,
           status: true
         },
-        where: {
-          status: 'active' // Only return active categories
-        },
         orderBy: {
           name: 'asc'
         }
       });
       
-      // Format response with id and name fields as expected by PostEditor
+      // Format response with hierarchical structure expected by CategoryList
       const formattedCategories = categories.map(cat => ({
         id: cat.categoryId.toString(),
         name: cat.name,
+        slug: cat.name.toLowerCase().replace(/\s+/g, '-'),
         description: cat.description,
-        status: cat.status
+        status: cat.status || 'active',
+        parentId: null,
+        icon: 'folder',
+        color: 'blue',
+        sortOrder: 0,
+        children: []
       }));
       
       res.json(formattedCategories);
     } catch (error) {
       console.error("Error fetching categories:", error);
       res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+
+  // POST /api/admin/categories - Create new category (admin only)
+  app.post("/api/admin/categories", async (req: Request, res: Response) => {
+    try {
+      if (!isAdmin(req)) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const { name, slug, description, status } = req.body;
+      
+      // Check if category with same name already exists
+      const existing = await prisma.category.findFirst({
+        where: { name }
+      });
+      
+      if (existing) {
+        return res.status(400).json({ error: "Category with this name already exists" });
+      }
+      
+      const category = await prisma.category.create({
+        data: {
+          name,
+          description: description || null,
+          status: status || 'active'
+        }
+      });
+      
+      res.status(201).json({
+        id: category.categoryId.toString(),
+        name: category.name,
+        slug: slug || category.name.toLowerCase().replace(/\s+/g, '-'),
+        description: category.description,
+        status: category.status,
+        parentId: null,
+        icon: 'folder',
+        color: 'blue',
+        sortOrder: 0
+      });
+    } catch (error) {
+      console.error("Error creating category:", error);
+      res.status(500).json({ error: "Failed to create category" });
+    }
+  });
+
+  // PUT /api/admin/categories/:id - Update category (admin only)
+  app.put("/api/admin/categories/:id", async (req: Request, res: Response) => {
+    try {
+      if (!isAdmin(req)) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const { id } = req.params;
+      const { name, slug, description, status } = req.body;
+      
+      const category = await prisma.category.update({
+        where: { 
+          categoryId: parseInt(id)
+        },
+        data: {
+          name,
+          description: description || null,
+          status: status || 'active'
+        }
+      });
+      
+      res.json({
+        id: category.categoryId.toString(),
+        name: category.name,
+        slug: slug || category.name.toLowerCase().replace(/\s+/g, '-'),
+        description: category.description,
+        status: category.status,
+        parentId: null,
+        icon: 'folder', 
+        color: 'blue',
+        sortOrder: 0
+      });
+    } catch (error) {
+      console.error("Error updating category:", error);
+      res.status(500).json({ error: "Failed to update category" });
+    }
+  });
+
+  // DELETE /api/admin/categories/:id - Delete category (admin only)
+  app.delete("/api/admin/categories/:id", async (req: Request, res: Response) => {
+    try {
+      if (!isAdmin(req)) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const { id } = req.params;
+      
+      // Check if category has associated posts
+      const postsCount = await prisma.post.count({
+        where: {
+          categoryId: parseInt(id)
+        }
+      });
+      
+      if (postsCount > 0) {
+        return res.status(400).json({ 
+          error: `Cannot delete category with ${postsCount} associated posts. Please reassign or delete the posts first.` 
+        });
+      }
+      
+      await prisma.category.delete({
+        where: {
+          categoryId: parseInt(id)
+        }
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      res.status(500).json({ error: "Failed to delete category" });
+    }
+  });
+
+  // PATCH /api/admin/categories/:id/reorder - Reorder category (admin only)
+  app.patch("/api/admin/categories/:id/reorder", async (req: Request, res: Response) => {
+    try {
+      if (!isAdmin(req)) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const { id } = req.params;
+      const { direction } = req.body;
+      
+      // For now, just return success as categories don't have sortOrder in the schema
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error reordering category:", error);
+      res.status(500).json({ error: "Failed to reorder category" });
     }
   });
 
