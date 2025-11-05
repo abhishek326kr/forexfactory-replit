@@ -46,7 +46,7 @@ const postSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title is too long'),
   content: z.string().min(1, 'Content is required'),
   author: z.string().min(1, 'Author is required'),
-  featuredImage: z.string().url().optional().or(z.literal('')),
+  featuredImage: z.string().optional(),
   categoryId: z.string().optional(),
   tags: z.string().optional(),
   downloadLink: z.string().url().optional().or(z.literal('')),
