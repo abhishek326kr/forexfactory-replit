@@ -6,6 +6,7 @@ import Layout from '@/components/Layout';
 import SEOHead from '@/components/SEOHead';
 import BlogCard from '@/components/BlogCard';
 import TimedDownloadButton from '@/components/TimedDownloadButton';
+import SignalsSidebar from '@/components/SignalsSidebar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -130,7 +131,10 @@ export default function BlogDetail() {
       
       <Layout breadcrumbs={breadcrumbs}>
         <article className="py-12">
-          <div className="max-w-4xl mx-auto px-4">
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+              {/* Main Content */}
+              <div className="lg:col-span-3">
             {/* Back Button */}
             <Link href="/blog">
               <Button variant="ghost" className="mb-6" data-testid="button-back-to-blog">
@@ -294,6 +298,13 @@ export default function BlogDetail() {
                 )}
               </>
             ) : null}
+              </div>
+              
+              {/* Sidebar */}
+              <aside className="lg:col-span-1">
+                <SignalsSidebar />
+              </aside>
+            </div>
           </div>
         </article>
       </Layout>
