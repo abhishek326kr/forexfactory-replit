@@ -114,9 +114,35 @@ export default function CategoryList() {
   const { data: categoriesData, isLoading, error } = useQuery({
     queryKey: ['/api/admin/categories'],
     queryFn: async () => {
-      // Mock data for now - replace with actual API call
+      const response = await fetch('/api/admin/categories');
+      if (!response.ok) {
+        throw new Error('Failed to fetch categories');
+      }
+      const data = await response.json();
+      
+      // Transform flat list to hierarchical if needed
+      const categories = data.categories || data.data || data;
+      const categoriesArray = Array.isArray(categories) ? categories : [];
+      
+      // Build hierarchy
+      const rootCategories = categoriesArray.filter(c => !c.parentId);
+      const childrenByParent = categoriesArray.reduce((acc, cat) => {
+        if (cat.parentId) {
+          if (!acc[cat.parentId]) acc[cat.parentId] = [];
+          acc[cat.parentId].push(cat);
+        }
+        return acc;
+      }, {} as Record<string, Category[]>);
+      
+      // Attach children to parents
+      const hierarchicalCategories = rootCategories.map(parent => ({
+        ...parent,
+        children: childrenByParent[parent.id] || []
+      }));
+      
       return {
-        categories: [
+        categories: hierarchicalCategories.length > 0 ? hierarchicalCategories : [
+          // Fallback data if API returns empty
           {
             id: '1',
             name: 'Expert Advisors',
@@ -127,52 +153,12 @@ export default function CategoryList() {
             color: 'blue',
             status: 'active' as const,
             sortOrder: 1,
-            childCount: 3,
-            postCount: 45,
-            children: [
-              {
-                id: '2',
-                name: 'Grid Trading',
-                slug: 'grid-trading',
-                description: 'Grid-based trading strategies',
-                parentId: '1',
-                icon: 'hash',
-                color: 'green',
-                status: 'active' as const,
-                sortOrder: 1,
-                childCount: 0,
-                postCount: 12
-              },
-              {
-                id: '3',
-                name: 'Scalping',
-                slug: 'scalping',
-                description: 'High-frequency scalping EAs',
-                parentId: '1',
-                icon: 'hash',
-                color: 'purple',
-                status: 'active' as const,
-                sortOrder: 2,
-                childCount: 0,
-                postCount: 18
-              },
-              {
-                id: '4',
-                name: 'Trend Following',
-                slug: 'trend-following',
-                description: 'Trend-based strategies',
-                parentId: '1',
-                icon: 'hash',
-                color: 'blue',
-                status: 'active' as const,
-                sortOrder: 3,
-                childCount: 0,
-                postCount: 15
-              }
-            ]
+            childCount: 0,
+            postCount: 0,
+            children: []
           },
           {
-            id: '5',
+            id: '2',
             name: 'Indicators',
             slug: 'indicators',
             description: 'Custom indicators for technical analysis',
@@ -181,65 +167,12 @@ export default function CategoryList() {
             color: 'purple',
             status: 'active' as const,
             sortOrder: 2,
-            childCount: 2,
-            postCount: 32,
-            children: [
-              {
-                id: '6',
-                name: 'Oscillators',
-                slug: 'oscillators',
-                description: 'RSI, MACD, Stochastic indicators',
-                parentId: '5',
-                icon: 'hash',
-                color: 'red',
-                status: 'active' as const,
-                sortOrder: 1,
-                childCount: 0,
-                postCount: 20
-              },
-              {
-                id: '7',
-                name: 'Trend Indicators',
-                slug: 'trend-indicators',
-                description: 'Moving averages and trend lines',
-                parentId: '5',
-                icon: 'hash',
-                color: 'green',
-                status: 'active' as const,
-                sortOrder: 2,
-                childCount: 0,
-                postCount: 12
-              }
-            ]
-          },
-          {
-            id: '8',
-            name: 'Trading Strategies',
-            slug: 'trading-strategies',
-            description: 'Educational content on trading strategies',
-            parentId: null,
-            icon: 'folder',
-            color: 'green',
-            status: 'active' as const,
-            sortOrder: 3,
             childCount: 0,
-            postCount: 28
-          },
-          {
-            id: '9',
-            name: 'Market Analysis',
-            slug: 'market-analysis',
-            description: 'Market news and analysis',
-            parentId: null,
-            icon: 'folder',
-            color: 'yellow',
-            status: 'inactive' as const,
-            sortOrder: 4,
-            childCount: 0,
-            postCount: 5
+            postCount: 0,
+            children: []
           }
         ],
-        total: 9
+        total: hierarchicalCategories.length || 2
       };
     }
   });

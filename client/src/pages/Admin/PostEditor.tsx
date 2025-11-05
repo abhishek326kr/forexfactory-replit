@@ -113,7 +113,15 @@ export default function PostEditor() {
 
   // Fetch categories
   const { data: categories } = useQuery({
-    queryKey: ['/api/categories']
+    queryKey: ['/api/admin/categories'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/categories');
+      if (!response.ok) {
+        throw new Error('Failed to fetch categories');
+      }
+      const data = await response.json();
+      return data.categories || data.data || data;
+    }
   });
 
   // Save post mutation
