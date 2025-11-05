@@ -8,7 +8,9 @@ import {
   Users,
   Download,
   Plus,
-  LogOut
+  LogOut,
+  Signal,
+  TrendingUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -18,6 +20,8 @@ export default function AdminSidebar() {
   const menuItems = [
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/posts', label: 'Blog Posts', icon: FileText },
+    { href: '/admin/add-signal', label: 'Add Signal', icon: Plus },
+    { href: '/admin/signals', label: 'Manage Signals', icon: Signal },
     { href: '/admin/downloads', label: 'Downloads', icon: Download },
     { href: '/admin/upload', label: 'Upload EA', icon: Upload },
     { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },

@@ -29,6 +29,7 @@ import AdminDashboard from "@/pages/Admin/Dashboard";
 import BlogList from "@/pages/Admin/BlogList";
 import SignalList from "@/pages/Admin/SignalList";
 import SignalEditor from "@/pages/Admin/SignalEditor";
+import SignalUploader from "@/pages/Admin/SignalUploader";
 import CategoryList from "@/pages/Admin/CategoryList";
 import UserList from "@/pages/Admin/UserList";
 import MediaManager from "@/pages/Admin/MediaManager";
@@ -79,6 +80,11 @@ function Router() {
       </Route>
       
       {/* Signal/EA Management */}
+      <Route path="/admin/add-signal">
+        <ProtectedRoute requireAdmin={true}>
+          <SignalUploader />
+        </ProtectedRoute>
+      </Route>
       <Route path="/admin/signals">
         <ProtectedRoute requireAdmin={true}>
           <SignalList />

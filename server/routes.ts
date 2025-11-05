@@ -3050,6 +3050,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/admin/signals/simple - Simple signal upload with minimal fields (auth required)
+  app.post("/api/admin/signals/simple", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { screenshot, description } = req.body;
+      
+      // Validate minimal required fields
+      if (!screenshot || !description) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: "Screenshot and description are required" 
+        });
+      }
+      
+      if (description.length < 10) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: "Description must be at least 10 characters" 
+        });
+      }
+      
+      // Generate a UUID for the signal
+      const uuid = crypto.randomBytes(16).toString('hex');
+      
+      // Auto-generate title from description (first 50 chars) or timestamp
+      const title = description.substring(0, 50) + (description.length > 50 ? '...' : '') 
+                    || `Signal ${new Date().toISOString().split('T')[0]}`;
+      
+      // Extract filename from screenshot URL
+      const fileName = screenshot.split('/').pop() || 'signal-screenshot.png';
+      
+      // Build the complete signal data with defaults
+      const signalData = {
+        uuid: uuid,
+        title: title,
+        description: description,
+        filePath: screenshot, // Using screenshot URL as filePath
+        mime: 'image/png', // Default to PNG for screenshots
+        sizeBytes: 0, // Default size (can be updated later)
+        platform: 'Both' as const,
+        status: 'active',
+        screenshots: JSON.stringify([screenshot]), // Store screenshot in screenshots array
+        downloadCount: 0,
+        rating: 0,
+        isPremium: false,
+        version: '1.0.0'
+      };
+      
+      // Create the signal with auto-generated data
+      const signal = await storage.createSignal(signalData);
+      res.status(201).json({ success: true, data: signal });
+    } catch (error: any) {
+      console.error("Error creating simple signal:", error);
+      res.status(500).json({ error: "Failed to create signal", message: error.message });
+    }
+  });
+
   // POST /api/admin/signals - Upload new signal/EA (auth required)
   app.post("/api/admin/signals", requireAdmin, async (req: Request, res: Response) => {
     try {
