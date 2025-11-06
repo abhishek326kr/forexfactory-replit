@@ -91,14 +91,26 @@ export default function SignalList() {
       averageRating: number;
     };
   }>({
-    queryKey: ['/api/admin/signals', { 
-      search: searchTerm, 
-      platform: platformFilter,
-      strategy: strategyFilter,
-      status: statusFilter,
-      page: currentPage, 
-      limit: itemsPerPage 
-    }]
+    queryKey: ['/api/admin/signals'],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (platformFilter && platformFilter !== 'all') params.append('platform', platformFilter);
+      if (strategyFilter && strategyFilter !== 'all') params.append('strategy', strategyFilter);
+      if (statusFilter && statusFilter !== 'all') params.append('status', statusFilter);
+      params.append('page', currentPage.toString());
+      params.append('limit', itemsPerPage.toString());
+      
+      const response = await fetch(`/api/admin/signals?${params.toString()}`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch signals');
+      }
+      
+      return response.json();
+    }
   });
 
   // Delete signal mutation

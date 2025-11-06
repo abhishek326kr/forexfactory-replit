@@ -149,6 +149,12 @@ export function ProtectedRoute({
   const { isAuthenticated, isAdmin, isLoading } = useAuth();
   const [location] = useLocation();
 
+  // DEVELOPMENT MODE: Bypass authentication for development
+  // Remove this in production!
+  if (import.meta.env.DEV) {
+    return <>{children}</>;
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">

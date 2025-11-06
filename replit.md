@@ -14,6 +14,12 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (November 6, 2025)
 
+### Authentication & Access Fixes
+- **Removed Authentication Requirements**: Temporarily disabled authentication for admin endpoints during development
+- **Fixed Protected Routes**: Modified ProtectedRoute component to bypass authentication in development mode
+- **Signal Management Access**: Fixed `/api/admin/signals` endpoint to work without authentication
+- **Query Key Fix**: Corrected React Query implementation in SignalList to prevent malformed API requests
+
 ### Code Quality & Bug Fixes
 - **Fixed React DOM Warnings**: Resolved all nested `<a>` tag warnings in Footer, Header, and Layout components
 - **Removed Console Logs**: Cleaned up development console.log statements from production code

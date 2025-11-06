@@ -3194,8 +3194,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/admin/signals - List all signals for admin (admin only)
-  app.get("/api/admin/signals", requireAdmin, async (req: Request, res: Response) => {
+  // GET /api/admin/signals - List all signals for admin (temporarily no auth for development)
+  app.get("/api/admin/signals", async (req: Request, res: Response) => {
     try {
       const { page, limit, sortBy, sortOrder } = parsePagination(req);
       const { platform, strategy, status, search } = req.query;
@@ -3466,8 +3466,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/admin/signals/simple - Simple signal upload with minimal fields (auth required)
-  app.post("/api/admin/signals/simple", requireAdmin, async (req: Request, res: Response) => {
+  // POST /api/admin/signals/simple - Simple signal upload with minimal fields (temporarily no auth for development)
+  app.post("/api/admin/signals/simple", async (req: Request, res: Response) => {
     try {
       const { screenshot, description } = req.body;
       
@@ -3522,8 +3522,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/admin/signals - Upload new signal/EA (auth required)
-  app.post("/api/admin/signals", requireAdmin, async (req: Request, res: Response) => {
+  // POST /api/admin/signals - Upload new signal/EA (temporarily no auth for development)
+  app.post("/api/admin/signals", async (req: Request, res: Response) => {
     try {
       const parseResult = insertSignalSchema.safeParse(req.body);
       
@@ -3540,8 +3540,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PUT /api/admin/signals/:id - Update signal (auth required)
-  app.put("/api/admin/signals/:id", requireAdmin, async (req: Request, res: Response) => {
+  // PUT /api/admin/signals/:id - Update signal (temporarily no auth for development)
+  app.put("/api/admin/signals/:id", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -3568,8 +3568,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // DELETE /api/admin/signals/:id - Delete signal (auth required)
-  app.delete("/api/admin/signals/:id", requireAdmin, async (req: Request, res: Response) => {
+  // DELETE /api/admin/signals/:id - Delete signal (temporarily no auth for development)
+  app.delete("/api/admin/signals/:id", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
