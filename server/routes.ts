@@ -52,6 +52,7 @@ import { ObjectPermission } from "./objectAcl";
 import { indexingService } from "./services/indexing-service";
 import { aiSeoService } from "./services/ai-seo-service";
 import { SeoService } from "./services/seo-service";
+import { seoService } from "./seo/index";
 
 // Dynamic storage selection based on database availability
 let storage: IStorage = memStorage;
@@ -510,15 +511,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // SEO Routes - These should be at the root level, not under /api
   app.get("/robots.txt", generateDynamicRobotsTxt);
-  app.get("/sitemap.xml", generateSitemap);
-  app.get("/sitemap-index.xml", generateSitemapIndex);
+  
+  // Enhanced SEO Sitemap endpoints
+  app.get("/sitemap.xml", seoService.handlers.sitemapIndex);
+  app.get("/sitemap-index.xml", seoService.handlers.sitemapIndex);
+  app.get("/sitemap-posts.xml", seoService.handlers.sitemapPosts);
+  app.get("/sitemap-signals.xml", seoService.handlers.sitemapSignals);
+  app.get("/sitemap-categories.xml", seoService.handlers.sitemapCategories);
+  app.get("/sitemap-pages.xml", seoService.handlers.sitemapPages);
+  app.get("/sitemap-images.xml", seoService.handlers.sitemapImages);
+  
+  // Keep legacy news sitemap for backward compatibility
   app.get("/sitemap-news.xml", generateNewsSitemap);
-  app.get("/rss.xml", generateRssFeed);
-  app.get("/feed.xml", generateRssFeed);
-  app.get("/rss", generateRssFeed);
-  app.get("/rss-downloads.xml", generateDownloadsRssFeed);
-  app.get("/atom.xml", generateAtomFeed);
-  app.get("/feed/atom", generateAtomFeed);
+  
+  // Enhanced RSS/Atom feed endpoints  
+  app.get("/rss.xml", seoService.handlers.rssFeed);
+  app.get("/feed.xml", seoService.handlers.rssFeed);
+  app.get("/rss", seoService.handlers.rssFeed);
+  app.get("/rss-signals.xml", seoService.handlers.signalsRssFeed);
+  app.get("/rss-downloads.xml", seoService.handlers.signalsRssFeed); // Alias for signals feed
+  app.get("/atom.xml", seoService.handlers.atomFeed);
+  app.get("/feed/atom", seoService.handlers.atomFeed);
+  
+  // IndexNow verification key endpoint
+  app.get("/indexnow-key.txt", seoService.handlers.indexNowKey);
 
   // ==================== AUTHENTICATION ENDPOINTS ====================
   
@@ -2480,6 +2496,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Trigger SEO updates for new blog
+      await seoService.onContentCreated('blog', blog);
+      
       res.status(201).json({ 
         id: blog.id, 
         slug: blog.seoSlug,
@@ -2558,6 +2577,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Trigger SEO updates for updated blog
+      await seoService.onContentUpdated('blog', blog);
+      
       res.json({ 
         id: blog.id,
         slug: blog.seoSlug,
@@ -3033,10 +3055,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid blog ID" });
       }
       
+      // Get blog before deletion to trigger SEO updates
+      const blog = await storage.getBlogById(id);
+      
       const success = await storage.deleteBlog(id);
       
       if (!success) {
         return res.status(404).json({ error: "Blog not found" });
+      }
+      
+      // Trigger SEO updates for deleted blog
+      if (blog) {
+        const blogUrl = `${process.env.SITE_URL || 'https://forexfactory.cc'}/blog/${blog.seoSlug}`;
+        await seoService.onContentDeleted('blog', blogUrl);
       }
       
       res.json({ success: true, message: "Blog deleted successfully" });
@@ -3522,6 +3553,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create the signal with auto-generated data
       const signal = await storage.createSignal(signalData);
+      
+      // Trigger SEO updates for new signal
+      await seoService.onContentCreated('signal', signal);
+      
       res.status(201).json({ success: true, data: signal });
     } catch (error: any) {
       console.error("Error creating simple signal:", error);
@@ -3540,6 +3575,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const signal = await storage.createSignal(parseResult.data);
+      
+      // Trigger SEO updates for new signal
+      await seoService.onContentCreated('signal', signal);
+      
       res.status(201).json({ success: true, data: signal });
     } catch (error: any) {
       console.error("Error creating signal:", error);
@@ -3568,6 +3607,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Signal not found" });
       }
       
+      // Trigger SEO updates for updated signal
+      await seoService.onContentUpdated('signal', signal);
+      
       res.json({ success: true, data: signal });
     } catch (error: any) {
       console.error("Error updating signal:", error);
@@ -3583,10 +3625,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid signal ID" });
       }
       
+      // Get signal before deletion to trigger SEO updates
+      const signal = await storage.getSignalById(id);
+      
       const success = await storage.deleteSignal(id);
       
       if (!success) {
         return res.status(404).json({ error: "Signal not found" });
+      }
+      
+      // Trigger SEO updates for deleted signal
+      if (signal) {
+        const signalUrl = `${process.env.SITE_URL || 'https://forexfactory.cc'}/signals/${signal.uuid}`;
+        await seoService.onContentDeleted('signal', signalUrl);
       }
       
       res.json({ success: true, message: "Signal deleted successfully" });
@@ -4153,7 +4204,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ==================== ADVANCED SEO ENDPOINTS ====================
 
-  const seoService = new SeoService();
+  // Using the existing seoService instance from imports
+  // Note: SeoService from "./services/seo-service" is instantiated separately as needed
 
   // POST /api/admin/seo/generate-meta - Generate AI-powered meta tags
   app.post("/api/admin/seo/generate-meta", requireAdmin, async (req: Request, res: Response) => {
@@ -4464,6 +4516,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/admin/seo/regenerate-sitemap - Manual SEO regeneration (admin only)
+  app.post("/api/admin/seo/regenerate-sitemap", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      await seoService.regenerateAllSEO();
+      res.json({ success: true, message: "SEO regeneration complete" });
+    } catch (error: any) {
+      console.error("Error regenerating SEO:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // GET /api/admin/seo/status - Get SEO system status (admin only)
+  app.get("/api/admin/seo/status", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const status = await seoService.getSEOStatus();
+      res.json(status);
+    } catch (error: any) {
+      console.error("Error getting SEO status:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
   // POST /api/admin/seo/submit-sitemap - Submit sitemap to search engines
   app.post("/api/admin/seo/submit-sitemap", requireAdmin, async (req: Request, res: Response) => {
     try {
