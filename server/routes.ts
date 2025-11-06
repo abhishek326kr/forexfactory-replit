@@ -3096,17 +3096,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metaRobots,
         ogTitle,
         ogDescription,
-        ogImage,
-        // Download configuration fields
-        hasDownload,
-        downloadTitle,
-        downloadDescription,
-        downloadType,
-        downloadVersion,
-        downloadFileUrl,
-        downloadFileName,
-        downloadFileSize,
-        requiresLogin
+        ogImage
       } = req.body;
 
       // Generate slug if not provided
@@ -3124,6 +3114,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       slug = finalSlug;
 
       // Use storage layer instead of direct Prisma
+      // Resolve a valid category id
+      let resolvedCategoryId = categoryId ? parseInt(categoryId.toString()) : NaN;
+      if (!resolvedCategoryId || Number.isNaN(resolvedCategoryId)) {
+        const categories = await storage.getAllCategories();
+        if (categories && categories.length > 0) {
+          resolvedCategoryId = Number((categories[0] as any).category_id || (categories[0] as any).categoryId);
+        } else {
+          const created = await storage.createCategory({ name: 'General', description: 'Default category', status: 'active' } as any);
+          resolvedCategoryId = Number((created as any).category_id || (created as any).categoryId);
+        }
+      } else {
+        const existingCat = await storage.getCategoryById(Number(resolvedCategoryId));
+        if (!existingCat) {
+          const created = await storage.createCategory({ name: 'General', description: 'Default category', status: 'active' } as any);
+          resolvedCategoryId = Number((created as any).category_id || (created as any).categoryId);
+        }
+      }
+
       const blogData = {
         title: title || '',
         content: content || '',
@@ -3131,21 +3139,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         seoSlug: slug,
         status: (status || 'draft') as BlogStatus,
         featuredImage: String(featuredImage || ''),
-        categoryId: categoryId ? parseInt(categoryId.toString()) : 1,
+        categoryId: resolvedCategoryId,
         tags: String(tags || ''),
         downloadLink: downloadLink ? String(downloadLink) : null,
-        views: 0,
-        // Download configuration fields
-        hasDownload: hasDownload || false,
-        downloadTitle: downloadTitle || null,
-        downloadDescription: downloadDescription || null,
-        downloadType: downloadType || null,
-        downloadVersion: downloadVersion || null,
-        downloadFileUrl: downloadFileUrl || null,
-        downloadFileName: downloadFileName || null,
-        downloadFileSize: downloadFileSize || null,
-        requiresLogin: requiresLogin !== false, // Default to true
-        downloadCount: 0
+        views: 0
       };
 
       // Create blog using storage layer
@@ -3194,8 +3191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   title: blog.title,
                   excerpt: content ? content.substring(0, 160) + '...' : '',
                   slug: blog.seoSlug,
-                  thumbnail: blog.featuredImage || undefined,
-                  hasDownload: blog.hasDownload
+                  thumbnail: blog.featuredImage || undefined
                 },
                 subscribers
               );
@@ -3541,8 +3537,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const categories = await storage.getAllCategories();
       
       // Format response with hierarchical structure expected by CategoryList
-      const formattedCategories = categories.map(cat => ({
-        id: cat.categoryId.toString(),
+      const formattedCategories = categories.map((cat: any) => ({
+        id: String(cat.categoryId ?? cat.category_id),
         name: cat.name,
         slug: cat.slug || cat.name.toLowerCase().replace(/\s+/g, '-'),
         description: cat.description,
@@ -3562,44 +3558,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/admin/categories - Create new category (admin only)
-  app.post("/api/admin/categories", async (req: Request, res: Response) => {
+  app.post("/api/admin/categories", requireAdmin, async (req: Request, res: Response) => {
     try {
-      if (!isAdmin(req)) {
-        return res.status(403).json({ error: "Admin access required" });
-      }
-
       const { name, slug, description, status } = req.body;
-      
-      // Check if category with same name already exists using storage
-      const allCategories = await storage.getAllCategories();
-      const existing = allCategories.find(cat => cat.name === name);
-      
-      if (existing) {
-        return res.status(400).json({ error: "Category with this name already exists" });
-      }
-      
+
       // Create category using storage interface
       const category = await storage.createCategory({
         name,
         slug: slug || name.toLowerCase().replace(/\s+/g, '-'),
         description: description || null,
-        status: status || 'active',
-        parentId: null,
-        icon: 'folder',
-        color: 'blue',
-        sortOrder: 0
-      });
-      
+        status: status || 'active'
+      } as any);
+
       res.status(201).json({
-        id: category.categoryId.toString(),
+        id: String((category as any).categoryId ?? (category as any).category_id),
         name: category.name,
-        slug: category.slug || category.name.toLowerCase().replace(/\s+/g, '-'),
+        slug: (category as any).slug || category.name.toLowerCase().replace(/\s+/g, '-'),
         description: category.description,
         status: category.status,
-        parentId: category.parentId || null,
-        icon: category.icon || 'folder',
-        color: category.color || 'blue',
-        sortOrder: category.sortOrder || 0
+        parentId: (category as any).parentId || null,
+        icon: (category as any).icon || 'folder',
+        color: (category as any).color || 'blue',
+        sortOrder: (category as any).sortOrder || 0
       });
     } catch (error) {
       console.error("Error creating category:", error);
@@ -3607,84 +3587,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PUT /api/admin/categories/:id - Update category (admin only)
-  app.put("/api/admin/categories/:id", async (req: Request, res: Response) => {
-    try {
-      if (!isAdmin(req)) {
-        return res.status(403).json({ error: "Admin access required" });
-      }
-
-      const { id } = req.params;
-      const { name, slug, description, status } = req.body;
-      
-      // Update category using storage interface
-      const category = await storage.updateCategory(parseInt(id), {
-        name,
-        slug: slug || name.toLowerCase().replace(/\s+/g, '-'),
-        description: description || null,
-        status: status || 'active'
-      });
-      
-      if (!category) {
-        return res.status(404).json({ error: "Category not found" });
-      }
-      
-      res.json({
-        id: category.categoryId.toString(),
-        name: category.name,
-        slug: category.slug || category.name.toLowerCase().replace(/\s+/g, '-'),
-        description: category.description,
-        status: category.status,
-        parentId: category.parentId || null,
-        icon: category.icon || 'folder', 
-        color: category.color || 'blue',
-        sortOrder: category.sortOrder || 0
-      });
-    } catch (error) {
-      console.error("Error updating category:", error);
-      res.status(500).json({ error: "Failed to update category" });
+// PUT /api/admin/categories/:id - Update category (admin only)
+app.put("/api/admin/categories/:id", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, slug, description, status } = req.body;
+    
+    // Update category using storage interface
+    const category = await storage.updateCategory(parseInt(id), {
+      name,
+      slug: slug || name.toLowerCase().replace(/\s+/g, '-'),
+      description: description || null,
+      status: status || 'active'
+    });
+    
+    if (!category) {
+      return res.status(404).json({ error: "Category not found" });
     }
-  });
+    
+    res.json({
+      id: category.categoryId.toString(),
+      name: category.name,
+      slug: category.slug || category.name.toLowerCase().replace(/\s+/g, '-'),
+      description: category.description,
+      status: category.status,
+      parentId: category.parentId || null,
+      icon: category.icon || 'folder', 
+      color: category.color || 'blue',
+      sortOrder: category.sortOrder || 0
+    });
+  } catch (error) {
+    console.error("Error updating category:", error);
+    res.status(500).json({ error: "Failed to update category" });
+  }
+});
 
-  // DELETE /api/admin/categories/:id - Delete category (admin only)
-  app.delete("/api/admin/categories/:id", async (req: Request, res: Response) => {
-    try {
-      if (!isAdmin(req)) {
-        return res.status(403).json({ error: "Admin access required" });
-      }
-
-      const { id } = req.params;
-      
-      // Check if category has associated posts using storage interface
-      const posts = await storage.getPostsByCategory(id, { page: 1, limit: 1 });
-      
-      if (posts.total > 0) {
-        return res.status(400).json({ 
-          error: `Cannot delete category with ${posts.total} associated posts. Please reassign or delete the posts first.` 
-        });
-      }
-      
-      // Delete category using storage interface
-      const deleted = await storage.deleteCategory(parseInt(id));
-      
-      if (!deleted) {
-        return res.status(404).json({ error: "Category not found" });
-      }
-      
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error deleting category:", error);
-      res.status(500).json({ error: "Failed to delete category" });
+// DELETE /api/admin/categories/:id - Delete category (admin only)
+app.delete("/api/admin/categories/:id", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if category has associated posts using storage interface
+    const posts = await storage.getPostsByCategory(id, { page: 1, limit: 1 });
+    
+    if (posts.total > 0) {
+      return res.status(400).json({ 
+        error: `Cannot delete category with ${posts.total} associated posts. Please reassign or delete the posts first.` 
+      });
     }
-  });
+    
+    // Delete category using storage interface
+    const deleted = await storage.deleteCategory(parseInt(id));
+    
+    if (!deleted) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting category:", error);
+    res.status(500).json({ error: "Failed to delete category" });
+  }
+});
 
   // PATCH /api/admin/categories/:id/reorder - Reorder category (admin only)
-  app.patch("/api/admin/categories/:id/reorder", async (req: Request, res: Response) => {
+  app.patch("/api/admin/categories/:id/reorder", requireAdmin, async (req: Request, res: Response) => {
     try {
-      if (!isAdmin(req)) {
-        return res.status(403).json({ error: "Admin access required" });
-      }
-
       const { id } = req.params;
       const { direction } = req.body;
       

@@ -431,12 +431,14 @@ export class PrismaStorage implements IStorage {
         data: {
           ...insertBlog,
           status: insertBlog.status || 'draft',
+          createdAt: new Date(),
           views: 0
         }
       });
       return blog as Blog;
     } catch (error) {
       handlePrismaError(error);
+      throw error;
     }
   }
 

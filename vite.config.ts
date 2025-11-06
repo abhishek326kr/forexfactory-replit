@@ -19,6 +19,17 @@ export default defineConfig({
         ]
       : []),
   ],
+  css: {
+    // Ensure PostCSS gets a `from` value to avoid warnings about missing `from`.
+    // This is safe and keeps plugins configured via postcss.config.js.
+    postcss: {
+      // Passing undefined tells PostCSS not to assume a concrete file path for virtual inputs
+      // and suppresses warnings from plugins that don't provide `from`.
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore - PostCSS options accept this at runtime
+      from: undefined,
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
