@@ -77,6 +77,7 @@ export interface IStorage {
   searchBlogs(query: string, options?: PaginationOptions): Promise<PaginatedResult<Blog>>;
   getRelatedBlogs(blogId: number, limit?: number): Promise<Blog[]>;
   getFeaturedBlogs(limit?: number): Promise<Blog[]>;
+  findAllTags(): Promise<string[]>;
 
   // ============================================
   // SIGNAL/EA MANAGEMENT
@@ -570,6 +571,27 @@ export class MemStorage implements IStorage {
       .filter(b => b.status === 'published')
       .sort((a, b) => (b.views || 0) - (a.views || 0))
       .slice(0, limit);
+  }
+
+  async findAllTags(): Promise<string[]> {
+    // Get all published blogs
+    const publishedBlogs = Array.from(this.blogs.values())
+      .filter(b => b.status === 'published');
+    
+    // Extract unique tags from all blogs
+    const allTags = new Set<string>();
+    publishedBlogs.forEach(blog => {
+      // Check if tags exist and is a non-empty string
+      if (blog.tags && typeof blog.tags === 'string' && blog.tags.trim()) {
+        // Split by comma, trim each tag, and filter out empty strings
+        const tags = blog.tags.split(',').map(t => t.trim()).filter(t => t);
+        // Add each tag to the set
+        tags.forEach(tag => allTags.add(tag));
+      }
+    });
+    
+    // Return sorted array of unique tags
+    return Array.from(allTags).sort();
   }
 
   // ============================================
