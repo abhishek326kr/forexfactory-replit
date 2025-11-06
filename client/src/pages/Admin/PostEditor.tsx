@@ -558,6 +558,7 @@ export default function PostEditor() {
                             <ObjectUploader
                               maxNumberOfFiles={1}
                               maxFileSize={5242880} // 5MB
+                              handleCompletionExternally={true} // Handle completion ourselves
                               onGetUploadParameters={async () => {
                                 const response = await fetch('/api/admin/upload', {
                                   method: 'POST',

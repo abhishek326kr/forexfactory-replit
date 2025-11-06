@@ -21,6 +21,8 @@ interface ObjectUploaderProps {
   buttonClassName?: string;
   children: ReactNode;
   disabled?: boolean;
+  completeEndpoint?: string;  // Allow customizing the completion endpoint
+  handleCompletionExternally?: boolean; // When true, skip internal completion call
 }
 
 /**
@@ -35,6 +37,8 @@ export function ObjectUploader({
   buttonClassName,
   children,
   disabled = false,
+  completeEndpoint = '/api/upload/complete', // Default to non-admin endpoint
+  handleCompletionExternally = false, // Default to handling completion internally
 }: ObjectUploaderProps) {
   const [showModal, setShowModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -97,26 +101,14 @@ export function ObjectUploader({
       xhr.onload = async function() {
         if (xhr.status === 200 || xhr.status === 204) {
           try {
-            // Step 3: Notify server that upload is complete and get public URL
-            const response = await fetch('/api/upload/complete', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                uploadURL: params.url
-              })
-            });
-
-            if (response.ok) {
-              const data = await response.json();
+            if (handleCompletionExternally) {
+              // Parent component handles completion - just pass the upload URL
               setUploadSuccess(true);
               
-              // Return the result in the expected format
               const result = {
                 successful: [{
                   uploadURL: params.url,
-                  response: { body: { url: data.publicUrl || data.objectPath } }
+                  response: { body: { url: params.url } }
                 }]
               };
               onComplete?.(result);
@@ -127,7 +119,39 @@ export function ObjectUploader({
                 resetState();
               }, 1000);
             } else {
-              setError('Failed to finalize upload. Please try again.');
+              // Step 3: Notify server that upload is complete and get public URL
+              const response = await fetch(completeEndpoint, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                credentials: 'include', // Include credentials for admin endpoints
+                body: JSON.stringify({
+                  uploadURL: params.url
+                })
+              });
+
+              if (response.ok) {
+                const data = await response.json();
+                setUploadSuccess(true);
+                
+                // Return the result in the expected format
+                const result = {
+                  successful: [{
+                    uploadURL: params.url,
+                    response: { body: { url: data.publicUrl || data.objectPath } }
+                  }]
+                };
+                onComplete?.(result);
+                
+                // Close modal after short delay
+                setTimeout(() => {
+                  setShowModal(false);
+                  resetState();
+                }, 1000);
+              } else {
+                setError('Failed to finalize upload. Please try again.');
+              }
             }
           } catch (err) {
             setError('Failed to complete upload process.');
