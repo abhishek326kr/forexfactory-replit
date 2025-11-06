@@ -29,7 +29,9 @@ import {
   FolderOpen,
   Bot,
   Image,
-  Search
+  Search,
+  Plus,
+  List
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -65,9 +67,14 @@ const navItems: NavItem[] = [
     icon: FolderOpen
   },
   {
-    title: 'Signals',
+    title: 'Add Signal',
+    href: '/admin/signals/new',
+    icon: Plus
+  },
+  {
+    title: 'Manage Signals',
     href: '/admin/signals',
-    icon: Bot
+    icon: List
   },
   {
     title: 'Users',
