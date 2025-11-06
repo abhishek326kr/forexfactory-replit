@@ -254,6 +254,13 @@ export const META_DESCRIPTION_TEMPLATES = {
       "Get Trend Master Robot for MT5. Advanced trend following EA with risk management, multi-timeframe analysis. Proven profitable results."
     ]
   },
+  SIGNAL: {
+    template: "Browse {topic} for MT4/MT5. Get {benefit} and achieve {outcome}. Download free trading robots today.",
+    examples: [
+      "Browse Expert Advisors and trading signals for MT4/MT5. Get automated trading strategies and achieve consistent profits. Download free trading robots today.",
+      "Explore professional Forex signals for MetaTrader. Access proven EA strategies and boost your trading performance. Free downloads available."
+    ]
+  },
   CATEGORY: {
     template: "Browse {count}+ free {category} for {platforms}. Compare features, download instantly & get setup guides. Updated {date}.",
     examples: [

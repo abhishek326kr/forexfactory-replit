@@ -32,6 +32,10 @@ import SeoManager from "@/pages/Admin/SeoManager";
 import Analytics from "@/pages/Admin/Analytics";
 import PostEditor from "@/pages/Admin/PostEditor";
 import Settings from "@/pages/Admin/Settings";
+import SignalList from "@/pages/Admin/SignalList";
+import SignalEditor from "@/pages/Admin/SignalEditor";
+import SignalUploader from "@/pages/Admin/SignalUploader";
+import SignalDetail from "@/pages/SignalDetail";
 
 function Router() {
   return (
@@ -42,6 +46,7 @@ function Router() {
       <Route path="/blog/:slug" component={BlogDetail} />
       <Route path="/category/:category" component={BlogEnhanced} />
       <Route path="/signals" component={Signals} />
+      <Route path="/signals/:id" component={SignalDetail} />
       <Route path="/search" component={SearchResults} />
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />
@@ -77,6 +82,23 @@ function Router() {
       <Route path="/admin/categories">
         <ProtectedRoute requireAdmin={true}>
           <CategoryList />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* Signal Management */}
+      <Route path="/admin/signals">
+        <ProtectedRoute requireAdmin={true}>
+          <SignalList />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/signals/new">
+        <ProtectedRoute requireAdmin={true}>
+          <SignalUploader />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/signals/edit/:id">
+        <ProtectedRoute requireAdmin={true}>
+          <SignalEditor />
         </ProtectedRoute>
       </Route>
       

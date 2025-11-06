@@ -65,6 +65,11 @@ const navItems: NavItem[] = [
     icon: FolderOpen
   },
   {
+    title: 'Signals',
+    href: '/admin/signals',
+    icon: Bot
+  },
+  {
     title: 'Users',
     href: '/admin/users',
     icon: Users
