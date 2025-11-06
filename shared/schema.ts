@@ -168,7 +168,18 @@ export const posts = mysqlTable('posts', {
   metaDescription: text('meta_description'),
   metaKeywords: text('meta_keywords'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow()
+  updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
+  // Download-related fields
+  hasDownload: boolean('has_download').default(false),
+  downloadTitle: text('download_title'),
+  downloadDescription: text('download_description'),
+  downloadFileName: text('download_file_name'),
+  downloadFileUrl: text('download_file_url'),
+  downloadFileSize: text('download_file_size'),
+  downloadVersion: text('download_version'),
+  downloadType: text('download_type'), // EA, Indicator, Template, Tool, or Other
+  downloadCount: int('download_count').default(0),
+  requiresLogin: boolean('requires_login').default(true)
 });
 
 // SEO Meta table
@@ -245,8 +256,42 @@ export const users = mysqlTable('users', {
   subscriptionEndDate: datetime('subscription_end_date'),
   lastLogin: datetime('last_login'),
   emailVerified: boolean('email_verified').default(false),
-  twoFactorEnabled: boolean('two_factor_enabled').default(false)
+  twoFactorEnabled: boolean('two_factor_enabled').default(false),
+  // Email notification preferences
+  emailVerificationToken: text('email_verification_token'),
+  subscribeToNewPosts: boolean('subscribe_to_new_posts').default(true),
+  subscribeToWeeklyDigest: boolean('subscribe_to_weekly_digest').default(false),
+  lastEmailSentAt: timestamp('last_email_sent_at')
 });
+
+// Downloads tracking table
+export const downloads = mysqlTable('downloads', {
+  id: int('id').autoincrement().primaryKey(),
+  userId: int('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  postId: int('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
+  downloadedAt: timestamp('downloaded_at').notNull().defaultNow(),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent')
+}, (table) => ({
+  userIdIdx: index('user_id_idx').on(table.userId),
+  postIdIdx: index('post_id_idx').on(table.postId),
+  downloadedAtIdx: index('downloaded_at_idx').on(table.downloadedAt)
+}));
+
+// Email Notifications table
+export const emailNotifications = mysqlTable('email_notifications', {
+  id: int('id').autoincrement().primaryKey(),
+  userId: int('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  emailType: varchar('email_type', { length: 50 }).notNull(), // "welcome", "new_post", "weekly_digest"
+  postId: int('post_id').references(() => posts.id, { onDelete: 'cascade' }),
+  sentAt: timestamp('sent_at').notNull().defaultNow(),
+  status: varchar('status', { length: 20 }).notNull().default('pending'), // "sent", "failed", "pending"
+  errorMessage: text('error_message')
+}, (table) => ({
+  userIdIdx: index('user_id_idx').on(table.userId),
+  emailTypeIdx: index('email_type_idx').on(table.emailType),
+  sentAtIdx: index('sent_at_idx').on(table.sentAt)
+}));
 
 // Pages table (for static content)
 export const pages = mysqlTable('pages', {
@@ -419,7 +464,8 @@ export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
   emailVerified: true,
-  twoFactorEnabled: true
+  twoFactorEnabled: true,
+  lastEmailSentAt: true
 }).extend({
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
@@ -430,7 +476,11 @@ export const insertUserSchema = createInsertSchema(users).omit({
   username: z.string().min(3).max(50).optional(),
   bio: z.string().optional(),
   role: z.enum(['viewer', 'user', 'editor', 'moderator', 'admin', 'super_admin']).optional(),
-  subscriptionStatus: z.enum(['free', 'basic', 'premium', 'enterprise']).optional()
+  subscriptionStatus: z.enum(['free', 'basic', 'premium', 'enterprise']).optional(),
+  // Email preferences
+  emailVerificationToken: z.string().optional(),
+  subscribeToNewPosts: z.boolean().optional(),
+  subscribeToWeeklyDigest: z.boolean().optional()
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -440,7 +490,8 @@ export type User = typeof users.$inferSelect;
 export const insertPostSchema = createInsertSchema(posts).omit({
   id: true,
   createdAt: true,
-  updatedAt: true
+  updatedAt: true,
+  downloadCount: true
 }).extend({
   title: z.string().min(1, "Title is required"),
   slug: z.string().min(1).regex(/^[a-z0-9-]+$/),
@@ -452,7 +503,17 @@ export const insertPostSchema = createInsertSchema(posts).omit({
   metaTitle: z.string().max(255).optional(),
   metaDescription: z.string().optional(),
   metaKeywords: z.string().optional(),
-  status: z.enum(['draft', 'published']).optional()
+  status: z.enum(['draft', 'published']).optional(),
+  // Download-related fields
+  hasDownload: z.boolean().optional(),
+  downloadTitle: z.string().optional(),
+  downloadDescription: z.string().optional(),
+  downloadFileName: z.string().optional(),
+  downloadFileUrl: z.string().optional(),
+  downloadFileSize: z.string().optional(),
+  downloadVersion: z.string().optional(),
+  downloadType: z.string().optional(),
+  requiresLogin: z.boolean().optional()
 });
 
 export type InsertPost = z.infer<typeof insertPostSchema>;
@@ -475,6 +536,35 @@ export const insertPageSchema = createInsertSchema(pages).omit({
 
 export type InsertPage = z.infer<typeof insertPageSchema>;
 export type Page = typeof pages.$inferSelect;
+
+// Downloads schemas
+export const insertDownloadSchema = createInsertSchema(downloads).omit({
+  id: true,
+  downloadedAt: true
+}).extend({
+  userId: z.number().positive(),
+  postId: z.number().positive(),
+  ipAddress: z.string().optional(),
+  userAgent: z.string().optional()
+});
+
+export type InsertDownload = z.infer<typeof insertDownloadSchema>;
+export type Download = typeof downloads.$inferSelect;
+
+// Email Notifications schemas
+export const insertEmailNotificationSchema = createInsertSchema(emailNotifications).omit({
+  id: true,
+  sentAt: true
+}).extend({
+  userId: z.number().positive(),
+  emailType: z.enum(['welcome', 'new_post', 'weekly_digest']),
+  postId: z.number().positive().optional(),
+  status: z.enum(['sent', 'failed', 'pending']).default('pending'),
+  errorMessage: z.string().optional()
+});
+
+export type InsertEmailNotification = z.infer<typeof insertEmailNotificationSchema>;
+export type EmailNotification = typeof emailNotifications.$inferSelect;
 
 // ============================================
 // ADDITIONAL TYPES AND ENUMS

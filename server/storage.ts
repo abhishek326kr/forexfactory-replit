@@ -9,6 +9,8 @@ import {
   type Signal, type InsertSignal,
   type Post, type InsertPost,
   type Page, type InsertPage,
+  type Download, type InsertDownload,
+  type EmailNotification, type InsertEmailNotification,
   type BlogStatus,
   type UserRole,
   type AdminRole,
@@ -183,6 +185,41 @@ export interface IStorage {
   getPageTree(): Promise<Page[]>;
 
   // ============================================
+  // DOWNLOAD MANAGEMENT
+  // ============================================
+  createDownload(download: InsertDownload): Promise<Download>;
+  getDownloadById(id: number): Promise<Download | undefined>;
+  getDownloadsByUser(userId: number, options?: PaginationOptions): Promise<PaginatedResult<Download>>;
+  getDownloadsByPost(postId: number, options?: PaginationOptions): Promise<PaginatedResult<Download>>;
+  getTotalDownloadsForPost(postId: number): Promise<number>;
+  getRecentDownloads(limit?: number): Promise<Download[]>;
+  getUserDownloadHistory(userId: number, postId: number): Promise<Download[]>;
+  checkUserHasDownloaded(userId: number, postId: number): Promise<boolean>;
+  getDownloadStats(startDate?: Date, endDate?: Date): Promise<{ totalDownloads: number; uniqueUsers: number; topPosts: Array<{postId: number; downloads: number}> }>;
+  incrementPostDownloadCount(postId: number): Promise<void>;
+  
+  // ============================================
+  // EMAIL NOTIFICATION MANAGEMENT
+  // ============================================
+  createEmailNotification(notification: InsertEmailNotification): Promise<EmailNotification>;
+  updateEmailNotificationStatus(id: number, status: 'sent' | 'failed', errorMessage?: string): Promise<EmailNotification | undefined>;
+  getEmailNotificationById(id: number): Promise<EmailNotification | undefined>;
+  getEmailNotificationsByUser(userId: number, options?: PaginationOptions): Promise<PaginatedResult<EmailNotification>>;
+  getPendingEmailNotifications(limit?: number): Promise<EmailNotification[]>;
+  getFailedEmailNotifications(limit?: number): Promise<EmailNotification[]>;
+  markEmailAsSent(id: number): Promise<boolean>;
+  markEmailAsFailed(id: number, errorMessage: string): Promise<boolean>;
+  getLastEmailSentToUser(userId: number, emailType?: string): Promise<EmailNotification | undefined>;
+  getUsersWithEmailPreference(preference: 'subscribeToNewPosts' | 'subscribeToWeeklyDigest'): Promise<User[]>;
+  updateUserEmailPreferences(userId: number, preferences: { subscribeToNewPosts?: boolean; subscribeToWeeklyDigest?: boolean }): Promise<User | undefined>;
+  updateUserLastEmailSentAt(userId: number): Promise<void>;
+  getUsersForWeeklyDigest(): Promise<User[]>;
+  getUsersForNewPostNotification(): Promise<User[]>;
+  setEmailVerificationToken(userId: number, token: string): Promise<void>;
+  clearEmailVerificationToken(userId: number): Promise<void>;
+  getUserByEmailVerificationToken(token: string): Promise<User | undefined>;
+
+  // ============================================
   // UTILITY METHODS
   // ============================================
   initialize(): Promise<void>;
@@ -215,6 +252,8 @@ export class MemStorage implements IStorage {
   private posts: Map<number, Post> = new Map();
   private pages: Map<number, Page> = new Map();
   private blogCategories: Map<string, { blogId: number; categoryId: number }> = new Map();
+  private downloads: Map<number, Download> = new Map();
+  private emailNotifications: Map<number, EmailNotification> = new Map();
   
   private nextAdminId = 1;
   private nextUserId = 1;
@@ -226,6 +265,8 @@ export class MemStorage implements IStorage {
   private nextMediaId = 1;
   private nextPostId = 1;
   private nextPageId = 1;
+  private nextDownloadId = 1;
+  private nextEmailNotificationId = 1;
 
   constructor() {
     // Initialize collections
@@ -1249,6 +1290,272 @@ export class MemStorage implements IStorage {
     });
     
     return tree.sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
+
+  // ============================================
+  // DOWNLOAD MANAGEMENT IMPLEMENTATION
+  // ============================================
+  async createDownload(insertDownload: InsertDownload): Promise<Download> {
+    const id = this.nextDownloadId++;
+    const download: Download = {
+      id,
+      ...insertDownload,
+      downloadedAt: new Date()
+    };
+    this.downloads.set(id, download);
+    return download;
+  }
+
+  async getDownloadById(id: number): Promise<Download | undefined> {
+    return this.downloads.get(id);
+  }
+
+  async getDownloadsByUser(userId: number, options: PaginationOptions = {}): Promise<PaginatedResult<Download>> {
+    const { page = 1, limit = 10 } = options;
+    const userDownloads = Array.from(this.downloads.values()).filter(d => d.userId === userId);
+    const total = userDownloads.length;
+    const start = (page - 1) * limit;
+    const data = userDownloads.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  async getDownloadsByPost(postId: number, options: PaginationOptions = {}): Promise<PaginatedResult<Download>> {
+    const { page = 1, limit = 10 } = options;
+    const postDownloads = Array.from(this.downloads.values()).filter(d => d.postId === postId);
+    const total = postDownloads.length;
+    const start = (page - 1) * limit;
+    const data = postDownloads.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  async getTotalDownloadsForPost(postId: number): Promise<number> {
+    return Array.from(this.downloads.values()).filter(d => d.postId === postId).length;
+  }
+
+  async getRecentDownloads(limit: number = 10): Promise<Download[]> {
+    const downloads = Array.from(this.downloads.values())
+      .sort((a, b) => b.downloadedAt.getTime() - a.downloadedAt.getTime())
+      .slice(0, limit);
+    return downloads;
+  }
+
+  async getUserDownloadHistory(userId: number, postId: number): Promise<Download[]> {
+    return Array.from(this.downloads.values()).filter(d => d.userId === userId && d.postId === postId);
+  }
+
+  async checkUserHasDownloaded(userId: number, postId: number): Promise<boolean> {
+    return Array.from(this.downloads.values()).some(d => d.userId === userId && d.postId === postId);
+  }
+
+  async getDownloadStats(startDate?: Date, endDate?: Date): Promise<{ totalDownloads: number; uniqueUsers: number; topPosts: Array<{postId: number; downloads: number}> }> {
+    let downloads = Array.from(this.downloads.values());
+    
+    if (startDate || endDate) {
+      downloads = downloads.filter(d => {
+        const downloadTime = d.downloadedAt.getTime();
+        if (startDate && endDate) {
+          return downloadTime >= startDate.getTime() && downloadTime <= endDate.getTime();
+        } else if (startDate) {
+          return downloadTime >= startDate.getTime();
+        } else if (endDate) {
+          return downloadTime <= endDate.getTime();
+        }
+        return true;
+      });
+    }
+    
+    const uniqueUsers = new Set(downloads.map(d => d.userId));
+    const postCounts = new Map<number, number>();
+    
+    downloads.forEach(d => {
+      postCounts.set(d.postId, (postCounts.get(d.postId) || 0) + 1);
+    });
+    
+    const topPosts = Array.from(postCounts.entries())
+      .map(([postId, downloads]) => ({ postId, downloads }))
+      .sort((a, b) => b.downloads - a.downloads)
+      .slice(0, 10);
+    
+    return {
+      totalDownloads: downloads.length,
+      uniqueUsers: uniqueUsers.size,
+      topPosts
+    };
+  }
+
+  async incrementPostDownloadCount(postId: number): Promise<void> {
+    const post = this.posts.get(postId);
+    if (post) {
+      post.downloadCount = (post.downloadCount || 0) + 1;
+      this.posts.set(postId, post);
+    }
+  }
+
+  // ============================================
+  // EMAIL NOTIFICATION MANAGEMENT IMPLEMENTATION
+  // ============================================
+  async createEmailNotification(insertNotification: InsertEmailNotification): Promise<EmailNotification> {
+    const id = this.nextEmailNotificationId++;
+    const notification: EmailNotification = {
+      id,
+      ...insertNotification,
+      sentAt: new Date(),
+      status: insertNotification.status || 'pending'
+    };
+    this.emailNotifications.set(id, notification);
+    return notification;
+  }
+
+  async updateEmailNotificationStatus(id: number, status: 'sent' | 'failed', errorMessage?: string): Promise<EmailNotification | undefined> {
+    const notification = this.emailNotifications.get(id);
+    if (!notification) return undefined;
+    notification.status = status;
+    if (errorMessage) {
+      notification.errorMessage = errorMessage;
+    }
+    this.emailNotifications.set(id, notification);
+    return notification;
+  }
+
+  async getEmailNotificationById(id: number): Promise<EmailNotification | undefined> {
+    return this.emailNotifications.get(id);
+  }
+
+  async getEmailNotificationsByUser(userId: number, options: PaginationOptions = {}): Promise<PaginatedResult<EmailNotification>> {
+    const { page = 1, limit = 10 } = options;
+    const userNotifications = Array.from(this.emailNotifications.values())
+      .filter(n => n.userId === userId)
+      .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime());
+    const total = userNotifications.length;
+    const start = (page - 1) * limit;
+    const data = userNotifications.slice(start, start + limit);
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1
+    };
+  }
+
+  async getPendingEmailNotifications(limit: number = 100): Promise<EmailNotification[]> {
+    return Array.from(this.emailNotifications.values())
+      .filter(n => n.status === 'pending')
+      .slice(0, limit);
+  }
+
+  async getFailedEmailNotifications(limit: number = 100): Promise<EmailNotification[]> {
+    return Array.from(this.emailNotifications.values())
+      .filter(n => n.status === 'failed')
+      .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime())
+      .slice(0, limit);
+  }
+
+  async markEmailAsSent(id: number): Promise<boolean> {
+    const notification = this.emailNotifications.get(id);
+    if (!notification) return false;
+    notification.status = 'sent';
+    this.emailNotifications.set(id, notification);
+    return true;
+  }
+
+  async markEmailAsFailed(id: number, errorMessage: string): Promise<boolean> {
+    const notification = this.emailNotifications.get(id);
+    if (!notification) return false;
+    notification.status = 'failed';
+    notification.errorMessage = errorMessage;
+    this.emailNotifications.set(id, notification);
+    return true;
+  }
+
+  async getLastEmailSentToUser(userId: number, emailType?: string): Promise<EmailNotification | undefined> {
+    const userNotifications = Array.from(this.emailNotifications.values())
+      .filter(n => {
+        const matchesUser = n.userId === userId;
+        const matchesType = !emailType || n.emailType === emailType;
+        return matchesUser && matchesType;
+      })
+      .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime());
+    
+    return userNotifications[0];
+  }
+
+  async getUsersWithEmailPreference(preference: 'subscribeToNewPosts' | 'subscribeToWeeklyDigest'): Promise<User[]> {
+    return Array.from(this.users.values()).filter(u => {
+      if (preference === 'subscribeToNewPosts') {
+        return u.subscribeToNewPosts === true;
+      } else if (preference === 'subscribeToWeeklyDigest') {
+        return u.subscribeToWeeklyDigest === true;
+      }
+      return false;
+    });
+  }
+
+  async updateUserEmailPreferences(userId: number, preferences: { subscribeToNewPosts?: boolean; subscribeToWeeklyDigest?: boolean }): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    
+    if (preferences.subscribeToNewPosts !== undefined) {
+      user.subscribeToNewPosts = preferences.subscribeToNewPosts;
+    }
+    if (preferences.subscribeToWeeklyDigest !== undefined) {
+      user.subscribeToWeeklyDigest = preferences.subscribeToWeeklyDigest;
+    }
+    
+    this.users.set(userId, user);
+    return user;
+  }
+
+  async updateUserLastEmailSentAt(userId: number): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      user.lastEmailSentAt = new Date();
+      this.users.set(userId, user);
+    }
+  }
+
+  async getUsersForWeeklyDigest(): Promise<User[]> {
+    return Array.from(this.users.values()).filter(u => u.subscribeToWeeklyDigest === true);
+  }
+
+  async getUsersForNewPostNotification(): Promise<User[]> {
+    return Array.from(this.users.values()).filter(u => u.subscribeToNewPosts === true);
+  }
+
+  async setEmailVerificationToken(userId: number, token: string): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      user.emailVerificationToken = token;
+      this.users.set(userId, user);
+    }
+  }
+
+  async clearEmailVerificationToken(userId: number): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      user.emailVerificationToken = null;
+      user.emailVerified = true;
+      this.users.set(userId, user);
+    }
+  }
+
+  async getUserByEmailVerificationToken(token: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(u => u.emailVerificationToken === token);
   }
 
   // ============================================
