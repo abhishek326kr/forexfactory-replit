@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Menu, X, Download, TrendingUp, BookOpen, Search, ChevronDown, Folder, BarChart3, FileCode, Zap, Layout, Bot } from 'lucide-react';
+import { Menu, X, Download, TrendingUp, BookOpen, Search, ChevronDown, Folder, BarChart3, FileCode, Zap, Layout, Bot, User, Settings, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ThemeToggle from './ThemeToggle';
 import GlobalSearch from './GlobalSearch';
@@ -9,8 +9,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface Category {
   id: string;
@@ -23,6 +26,7 @@ export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [location] = useLocation();
+  const { user, isAuthenticated, logout } = useAuth();
 
   // Fetch categories from API
   const { data: categories = [] } = useQuery<Category[]>({
@@ -198,11 +202,80 @@ export default function Header() {
             {!showSearch && (
               <>
                 <ThemeToggle />
-                <Link href="/admin">
-                  <Button variant="default" size="sm" data-testid="button-admin">
-                    Admin Panel
-                  </Button>
-                </Link>
+                
+                {/* User Menu / Auth Buttons */}
+                {isAuthenticated && user ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        className="relative h-10 w-10 rounded-full"
+                        data-testid="button-user-menu"
+                      >
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={user.avatar || undefined} alt={user.username} />
+                          <AvatarFallback>
+                            {user.username ? user.username.slice(0, 2).toUpperCase() : 'U'}
+                          </AvatarFallback>
+                        </Avatar>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56" align="end" forceMount>
+                      <div className="flex items-center justify-start gap-2 p-2">
+                        <div className="flex flex-col space-y-1 leading-none">
+                          {user.username && (
+                            <p className="text-sm font-medium">{user.username}</p>
+                          )}
+                          <p className="text-xs text-muted-foreground">{user.email}</p>
+                        </div>
+                      </div>
+                      <DropdownMenuSeparator />
+                      
+                      {user.role === 'admin' && (
+                        <>
+                          <Link href="/admin">
+                            <DropdownMenuItem data-testid="menu-admin-panel">
+                              <Layout className="mr-2 h-4 w-4" />
+                              Admin Panel
+                            </DropdownMenuItem>
+                          </Link>
+                          <DropdownMenuSeparator />
+                        </>
+                      )}
+                      
+                      <Link href="/settings">
+                        <DropdownMenuItem data-testid="menu-settings">
+                          <Settings className="mr-2 h-4 w-4" />
+                          Settings
+                        </DropdownMenuItem>
+                      </Link>
+                      
+                      <Link href="/settings#downloads">
+                        <DropdownMenuItem data-testid="menu-downloads">
+                          <Download className="mr-2 h-4 w-4" />
+                          Downloads
+                        </DropdownMenuItem>
+                      </Link>
+                      
+                      <DropdownMenuSeparator />
+                      
+                      <DropdownMenuItem 
+                        onClick={() => logout()}
+                        data-testid="menu-logout"
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Logout
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Link href="/login">
+                    <Button variant="default" size="sm" data-testid="button-login">
+                      Login
+                    </Button>
+                  </Link>
+                )}
               </>
             )}
             

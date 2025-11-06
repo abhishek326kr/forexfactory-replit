@@ -29,6 +29,8 @@ interface AuthContextValue {
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  updateProfile: (data: { name?: string; email?: string }) => Promise<void>;
+  refreshUser: () => Promise<void>;
   // Modal control
   loginModalOpen: boolean;
   loginModalMode: 'login' | 'signup';
@@ -131,6 +133,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   });
 
+  // Update profile mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: { name?: string; email?: string }) => {
+      const response = await apiRequest('PUT', '/api/user/profile', data);
+      return await response.json();
+    },
+    onSuccess: (response) => {
+      // Update the cached user data
+      const currentData = queryClient.getQueryData(['/api/auth/check']) as any;
+      if (currentData && response.user) {
+        queryClient.setQueryData(['/api/auth/check'], {
+          ...currentData,
+          user: { ...currentData.user, ...response.user }
+        });
+      }
+      toast({
+        title: 'Profile updated',
+        description: 'Your profile has been updated successfully'
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Update failed',
+        description: error.message || 'Failed to update profile',
+        variant: 'destructive'
+      });
+    }
+  });
+
   const login = async (email: string, password: string, rememberMe = false) => {
     await loginMutation.mutateAsync({ email, password });
     
@@ -147,6 +178,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const checkAuth = async () => {
+    await refetch();
+  };
+
+  const updateProfile = async (data: { name?: string; email?: string }) => {
+    await updateProfileMutation.mutateAsync(data);
+  };
+
+  const refreshUser = async () => {
     await refetch();
   };
   
@@ -209,6 +248,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     checkAuth,
+    updateProfile,
+    refreshUser,
     // Modal control
     loginModalOpen,
     loginModalMode,

@@ -19,7 +19,7 @@ import {
   insertAdminSchema,
   type User
 } from "@shared/schema";
-import { queueWelcomeEmail, queueVerificationEmail } from "./services/email-queue";
+import { queueWelcomeEmail, queueVerificationEmail, queueNewPostNotification } from "./services/email-queue";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import session from "express-session";
@@ -744,6 +744,516 @@ export async function registerRoutes(app: Express): Promise<Server> {
       authenticated: true, 
       user: userWithoutPassword 
     });
+  });
+
+  // ==================== EMAIL PREFERENCES ENDPOINTS ====================
+
+  // GET /api/email/unsubscribe/:token - Unsubscribe via email link
+  app.get("/api/email/unsubscribe/:token", async (req: Request, res: Response) => {
+    try {
+      const { token } = req.params;
+      const { type = 'all' } = req.query; // Type can be 'new_posts', 'weekly_digest', or 'all'
+      
+      if (!token) {
+        return res.status(400).send(`
+          <html>
+            <head><title>Unsubscribe Error</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h2>Invalid Unsubscribe Link</h2>
+              <p>The unsubscribe link is invalid or expired.</p>
+              <p><a href="/">Go to Homepage</a></p>
+            </body>
+          </html>
+        `);
+      }
+      
+      // Decode the token to get user information
+      // Token format: base64(userId:email:timestamp)
+      let decoded;
+      try {
+        decoded = Buffer.from(token, 'base64').toString('utf-8');
+        const [userId, email, timestamp] = decoded.split(':');
+        
+        // Check if token is not too old (30 days)
+        const tokenAge = Date.now() - parseInt(timestamp);
+        if (tokenAge > 30 * 24 * 60 * 60 * 1000) {
+          throw new Error('Token expired');
+        }
+        
+        // Update user preferences
+        const updateData: any = {};
+        if (type === 'new_posts' || type === 'all') {
+          updateData.subscribeToNewPosts = false;
+        }
+        if (type === 'weekly_digest' || type === 'all') {
+          updateData.subscribeToWeeklyDigest = false;
+        }
+        
+        await prisma.user.update({
+          where: { id: parseInt(userId) },
+          data: updateData
+        });
+        
+        // Return success page
+        return res.send(`
+          <html>
+            <head>
+              <title>Successfully Unsubscribed</title>
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                  text-align: center;
+                  padding: 50px;
+                  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                  color: white;
+                  min-height: 100vh;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                }
+                .container {
+                  background: rgba(255, 255, 255, 0.1);
+                  padding: 40px;
+                  border-radius: 10px;
+                  backdrop-filter: blur(10px);
+                  max-width: 500px;
+                }
+                h2 { color: #ffffff; }
+                p { color: #f0f0f0; margin: 20px 0; }
+                a { 
+                  color: #ffffff; 
+                  background: rgba(255, 255, 255, 0.2);
+                  padding: 10px 20px;
+                  text-decoration: none;
+                  border-radius: 5px;
+                  display: inline-block;
+                  margin: 10px;
+                  transition: background 0.3s;
+                }
+                a:hover {
+                  background: rgba(255, 255, 255, 0.3);
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h2>✅ Successfully Unsubscribed</h2>
+                <p>You have been unsubscribed from ${type === 'all' ? 'all email notifications' : type.replace('_', ' ')}.</p>
+                <p>We're sorry to see you go! You can always re-subscribe from your account settings.</p>
+                <p>
+                  <a href="/">Go to Homepage</a>
+                  <a href="/login">Login to Manage Settings</a>
+                </p>
+              </div>
+            </body>
+          </html>
+        `);
+        
+      } catch (error) {
+        console.error('Failed to decode unsubscribe token:', error);
+        return res.status(400).send(`
+          <html>
+            <head><title>Unsubscribe Error</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h2>Unsubscribe Failed</h2>
+              <p>The unsubscribe link is invalid or expired.</p>
+              <p>Please login to manage your email preferences.</p>
+              <p><a href="/login">Go to Login</a></p>
+            </body>
+          </html>
+        `);
+      }
+      
+    } catch (error: any) {
+      console.error('Unsubscribe error:', error);
+      res.status(500).send(`
+        <html>
+          <head><title>Error</title></head>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+            <h2>An Error Occurred</h2>
+            <p>We couldn't process your unsubscribe request. Please try again later.</p>
+            <p><a href="/">Go to Homepage</a></p>
+          </body>
+        </html>
+      `);
+    }
+  });
+
+  // POST /api/email/preferences - Update email preferences (protected)
+  app.post("/api/email/preferences", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.user!.id);
+      const { subscribeToNewPosts, subscribeToWeeklyDigest } = req.body;
+      
+      // Validate input
+      if (typeof subscribeToNewPosts !== 'boolean' && typeof subscribeToWeeklyDigest !== 'boolean') {
+        return res.status(400).json({ 
+          error: 'Invalid input',
+          message: 'At least one preference must be provided'
+        });
+      }
+      
+      // Build update data
+      const updateData: any = {};
+      if (typeof subscribeToNewPosts === 'boolean') {
+        updateData.subscribeToNewPosts = subscribeToNewPosts;
+      }
+      if (typeof subscribeToWeeklyDigest === 'boolean') {
+        updateData.subscribeToWeeklyDigest = subscribeToWeeklyDigest;
+      }
+      
+      // Update user preferences
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+        select: {
+          id: true,
+          email: true,
+          subscribeToNewPosts: true,
+          subscribeToWeeklyDigest: true
+        }
+      });
+      
+      res.json({
+        success: true,
+        message: 'Email preferences updated successfully',
+        preferences: {
+          subscribeToNewPosts: updatedUser.subscribeToNewPosts,
+          subscribeToWeeklyDigest: updatedUser.subscribeToWeeklyDigest
+        }
+      });
+      
+    } catch (error: any) {
+      console.error('Error updating email preferences:', error);
+      res.status(500).json({ 
+        error: 'Failed to update preferences',
+        message: error.message || 'An error occurred while updating your preferences'
+      });
+    }
+  });
+
+  // ==================== USER PROFILE ENDPOINTS ====================
+
+  // GET /api/user/profile - Get user profile data
+  app.get("/api/user/profile", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.user!.id);
+      
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          username: true,
+          phone: true,
+          avatar: true,
+          bio: true,
+          role: true,
+          subscriptionStatus: true,
+          subscriptionEndDate: true,
+          subscribeToNewPosts: true,
+          subscribeToWeeklyDigest: true,
+          emailVerified: true,
+          createdAt: true,
+          lastLogin: true
+        }
+      });
+      
+      if (!user) {
+        return res.status(404).json({ 
+          error: 'User not found',
+          message: 'User profile not found'
+        });
+      }
+      
+      res.json(user);
+      
+    } catch (error: any) {
+      console.error('Error fetching user profile:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch profile',
+        message: error.message || 'Failed to fetch user profile'
+      });
+    }
+  });
+
+  // PUT /api/user/profile - Update user profile
+  app.put("/api/user/profile", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.user!.id);
+      const { name, email } = req.body;
+      
+      // Validate email format if provided
+      if (email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          return res.status(400).json({ 
+            error: 'Invalid email',
+            message: 'Please provide a valid email address'
+          });
+        }
+        
+        // Check if email is already taken
+        const existingUser = await prisma.user.findFirst({
+          where: {
+            email: email.toLowerCase(),
+            NOT: { id: userId }
+          }
+        });
+        
+        if (existingUser) {
+          return res.status(400).json({ 
+            error: 'Email already exists',
+            message: 'This email is already registered to another account'
+          });
+        }
+      }
+      
+      // Build update data
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (email !== undefined) updateData.email = email.toLowerCase();
+      
+      // Update user profile
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          username: true,
+          avatar: true
+        }
+      });
+      
+      res.json({
+        success: true,
+        message: 'Profile updated successfully',
+        user: updatedUser
+      });
+      
+    } catch (error: any) {
+      console.error('Error updating user profile:', error);
+      res.status(500).json({ 
+        error: 'Failed to update profile',
+        message: error.message || 'Failed to update user profile'
+      });
+    }
+  });
+
+  // PUT /api/user/password - Update user password
+  app.put("/api/user/password", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.user!.id);
+      const { currentPassword, newPassword } = req.body;
+      
+      // Validate input
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ 
+          error: 'Missing required fields',
+          message: 'Current password and new password are required'
+        });
+      }
+      
+      // Validate new password strength
+      if (newPassword.length < 8) {
+        return res.status(400).json({ 
+          error: 'Weak password',
+          message: 'New password must be at least 8 characters long'
+        });
+      }
+      
+      // Get user with password
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          password: true
+        }
+      });
+      
+      if (!user) {
+        return res.status(404).json({ 
+          error: 'User not found',
+          message: 'User not found'
+        });
+      }
+      
+      // Verify current password
+      const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ 
+          error: 'Invalid password',
+          message: 'Current password is incorrect'
+        });
+      }
+      
+      // Hash new password
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      
+      // Update password
+      await prisma.user.update({
+        where: { id: userId },
+        data: { password: hashedPassword }
+      });
+      
+      res.json({
+        success: true,
+        message: 'Password updated successfully'
+      });
+      
+    } catch (error: any) {
+      console.error('Error updating password:', error);
+      res.status(500).json({ 
+        error: 'Failed to update password',
+        message: error.message || 'Failed to update password'
+      });
+    }
+  });
+
+  // GET /api/user/downloads - Get user's download history
+  app.get("/api/user/downloads", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.user!.id);
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+      const skip = (page - 1) * limit;
+      
+      // Get downloads with related blog info
+      const downloads = await prisma.download.findMany({
+        where: { userId },
+        skip,
+        take: limit,
+        orderBy: { downloadedAt: 'desc' },
+        include: {
+          blog: {
+            select: {
+              id: true,
+              title: true,
+              seoSlug: true,
+              downloadFileName: true,
+              downloadVersion: true,
+              downloadType: true
+            }
+          }
+        }
+      });
+      
+      // Get total count
+      const total = await prisma.download.count({
+        where: { userId }
+      });
+      
+      // Format response
+      const formattedDownloads = downloads.map(d => ({
+        id: d.id,
+        downloadedAt: d.downloadedAt,
+        fileName: d.blog?.downloadFileName || 'Unknown File',
+        version: d.blog?.downloadVersion || '1.0',
+        blog: d.blog ? {
+          id: d.blog.id,
+          title: d.blog.title,
+          slug: d.blog.seoSlug
+        } : null
+      }));
+      
+      res.json({
+        downloads: formattedDownloads,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      });
+      
+    } catch (error: any) {
+      console.error('Error fetching download history:', error);
+      // Return empty array instead of error for better UX
+      res.json({
+        downloads: [],
+        pagination: {
+          page: 1,
+          limit: 10,
+          total: 0,
+          totalPages: 0
+        }
+      });
+    }
+  });
+
+  // DELETE /api/user/account - Delete user account
+  app.delete("/api/user/account", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.user!.id);
+      const { password } = req.body;
+      
+      // Require password confirmation
+      if (!password) {
+        return res.status(400).json({ 
+          error: 'Password required',
+          message: 'Password confirmation is required to delete your account'
+        });
+      }
+      
+      // Get user with password
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          password: true
+        }
+      });
+      
+      if (!user) {
+        return res.status(404).json({ 
+          error: 'User not found',
+          message: 'User not found'
+        });
+      }
+      
+      // Verify password
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ 
+          error: 'Invalid password',
+          message: 'Password is incorrect'
+        });
+      }
+      
+      // Delete user and all related data (cascading delete)
+      await prisma.user.delete({
+        where: { id: userId }
+      });
+      
+      // Logout user
+      req.logout((err) => {
+        if (err) {
+          console.error('Logout error during account deletion:', err);
+        }
+      });
+      
+      // Clear session
+      req.session.destroy((err) => {
+        if (err) {
+          console.error('Session destruction error during account deletion:', err);
+        }
+      });
+      
+      res.json({
+        success: true,
+        message: 'Account deleted successfully'
+      });
+      
+    } catch (error: any) {
+      console.error('Error deleting account:', error);
+      res.status(500).json({ 
+        error: 'Failed to delete account',
+        message: error.message || 'Failed to delete account'
+      });
+    }
   });
 
   // GET /api/health - Health check endpoint for monitoring
@@ -2660,6 +3170,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Trigger SEO updates for new blog
       await seoService.onContentCreated('blog', blog);
       
+      // If blog is being published, send email notifications to subscribers
+      if (status === 'published') {
+        // Queue notifications asynchronously - don't wait
+        (async () => {
+          try {
+            // Get all users who are subscribed to new posts
+            const subscribers = await prisma.user.findMany({
+              where: {
+                subscribeToNewPosts: true,
+                emailVerified: true // Only send to verified emails
+              },
+              select: {
+                email: true,
+                name: true
+              }
+            });
+            
+            if (subscribers.length > 0) {
+              // Queue emails to subscribers
+              await queueNewPostNotification(
+                {
+                  title: blog.title,
+                  excerpt: content ? content.substring(0, 160) + '...' : '',
+                  slug: blog.seoSlug,
+                  thumbnail: blog.featuredImage || undefined,
+                  hasDownload: blog.hasDownload
+                },
+                subscribers
+              );
+              
+              console.log(`📧 Queued new post notifications for ${subscribers.length} subscribers`);
+            }
+          } catch (error) {
+            // Log error but don't fail the blog creation
+            console.error('Failed to queue new post notifications:', error);
+          }
+        })();
+      }
+      
       res.status(201).json({ 
         id: blog.id, 
         slug: blog.seoSlug,
@@ -2704,6 +3253,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         downloadFileSize,
         requiresLogin
       } = req.body;
+
+      // Get the current blog to check if status is changing
+      const currentBlog = await storage.getBlogById(Number(id));
+      if (!currentBlog) {
+        return res.status(404).json({ error: "Blog not found" });
+      }
+
+      // Track if blog is being newly published
+      const isNewlyPublished = status === 'published' && currentBlog.status !== 'published';
 
       // Update blog post using storage layer
       const updateData: Partial<BlogInsert> = {};
@@ -2760,6 +3318,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Trigger SEO updates for updated blog
       await seoService.onContentUpdated('blog', blog);
+      
+      // If blog is being newly published, send email notifications to subscribers
+      if (isNewlyPublished) {
+        // Queue notifications asynchronously - don't wait
+        (async () => {
+          try {
+            // Get all users who are subscribed to new posts
+            const subscribers = await prisma.user.findMany({
+              where: {
+                subscribeToNewPosts: true,
+                emailVerified: true // Only send to verified emails
+              },
+              select: {
+                email: true,
+                name: true
+              }
+            });
+            
+            if (subscribers.length > 0) {
+              // Queue emails to subscribers
+              await queueNewPostNotification(
+                {
+                  title: blog.title,
+                  excerpt: blog.content ? blog.content.substring(0, 160) + '...' : '',
+                  slug: blog.seoSlug,
+                  thumbnail: blog.featuredImage || undefined,
+                  hasDownload: blog.hasDownload
+                },
+                subscribers
+              );
+              
+              console.log(`📧 Queued new post notifications for ${subscribers.length} subscribers (blog was published)`);
+            }
+          } catch (error) {
+            // Log error but don't fail the blog update
+            console.error('Failed to queue new post notifications:', error);
+          }
+        })();
+      }
       
       res.json({ 
         id: blog.id,

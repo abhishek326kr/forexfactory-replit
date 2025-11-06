@@ -22,6 +22,9 @@ import Signals from "@/pages/Signals";
 // Import authentication pages
 import Login from "@/pages/Login";
 
+// Import user pages
+import UserSettings from "@/pages/UserSettings";
+
 // Import admin pages
 import AdminDashboard from "@/pages/Admin/Dashboard";
 import BlogList from "@/pages/Admin/BlogList";
@@ -55,6 +58,13 @@ function Router() {
       
       {/* Authentication */}
       <Route path="/login" component={Login} />
+      
+      {/* User Settings - Protected */}
+      <Route path="/settings">
+        <ProtectedRoute>
+          <UserSettings />
+        </ProtectedRoute>
+      </Route>
       
       {/* Admin routes - Protected */}
       <Route path="/admin">
