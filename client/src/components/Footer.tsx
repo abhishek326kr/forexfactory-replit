@@ -48,13 +48,11 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-12">
           {/* Brand Section */}
           <div className="space-y-4">
-            <Link href="/">
-              <a className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-primary-foreground" />
-                </div>
-                <span className="font-bold text-xl">ForexFactory.cc</span>
-              </a>
+            <Link href="/" className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <span className="font-bold text-xl">ForexFactory.cc</span>
             </Link>
             <p className="text-sm text-muted-foreground">
               Your trusted source for MetaTrader Expert Advisors and indicators. 
@@ -84,13 +82,12 @@ export default function Footer() {
               <ul className="space-y-2">
                 {section.links.map((link) => (
                   <li key={link.href}>
-                    <Link href={link.href}>
-                      <a
-                        className="text-sm text-muted-foreground hover:text-primary transition-colors"
-                        data-testid={`link-footer-${link.label.toLowerCase().replace(/\s+/g, '-')}`}
-                      >
-                        {link.label}
-                      </a>
+                    <Link
+                      href={link.href}
+                      className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                      data-testid={`link-footer-${link.label.toLowerCase().replace(/\s+/g, '-')}`}
+                    >
+                      {link.label}
                     </Link>
                   </li>
                 ))}
@@ -119,7 +116,6 @@ export default function Footer() {
                 data-testid="button-newsletter-submit"
                 onClick={(e) => {
                   e.preventDefault();
-                  console.log('Newsletter signup submitted');
                 }}
               >
                 Subscribe
@@ -137,20 +133,14 @@ export default function Footer() {
             © {currentYear} ForexFactory.cc. All rights reserved.
           </p>
           <div className="flex justify-center space-x-4 text-sm">
-            <Link href="/privacy">
-              <a className="text-muted-foreground hover:text-primary" data-testid="link-privacy">
-                Privacy Policy
-              </a>
+            <Link href="/privacy" className="text-muted-foreground hover:text-primary" data-testid="link-privacy">
+              Privacy Policy
             </Link>
-            <Link href="/terms">
-              <a className="text-muted-foreground hover:text-primary" data-testid="link-terms">
-                Terms of Service
-              </a>
+            <Link href="/terms" className="text-muted-foreground hover:text-primary" data-testid="link-terms">
+              Terms of Service
             </Link>
-            <Link href="/disclaimer">
-              <a className="text-muted-foreground hover:text-primary" data-testid="link-disclaimer">
-                Risk Disclaimer
-              </a>
+            <Link href="/disclaimer" className="text-muted-foreground hover:text-primary" data-testid="link-disclaimer">
+              Risk Disclaimer
             </Link>
           </div>
         </div>

@@ -24,22 +24,19 @@ export default function Layout({ children, breadcrumbs }: LayoutProps) {
         <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
             <nav className="flex items-center text-sm" aria-label="Breadcrumb">
-              <Link href="/">
-                <a className="text-muted-foreground hover:text-foreground transition-colors" data-testid="link-breadcrumb-home">
-                  Home
-                </a>
+              <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors" data-testid="link-breadcrumb-home">
+                Home
               </Link>
               {breadcrumbs.map((crumb, index) => (
                 <span key={index} className="flex items-center">
                   <ChevronRight className="mx-2 h-4 w-4 text-muted-foreground" />
                   {crumb.href ? (
-                    <Link href={crumb.href}>
-                      <a 
-                        className="text-muted-foreground hover:text-foreground transition-colors" 
-                        data-testid={`link-breadcrumb-${crumb.name.toLowerCase().replace(/\s+/g, '-')}`}
-                      >
-                        {crumb.name}
-                      </a>
+                    <Link 
+                      href={crumb.href}
+                      className="text-muted-foreground hover:text-foreground transition-colors" 
+                      data-testid={`link-breadcrumb-${crumb.name.toLowerCase().replace(/\s+/g, '-')}`}
+                    >
+                      {crumb.name}
                     </Link>
                   ) : (
                     <span className="text-foreground font-medium">{crumb.name}</span>

@@ -102,24 +102,24 @@ export default function Header() {
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-56">
-                        <Link href={`/category/${category.slug}`}>
-                          <DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href={`/category/${category.slug}`}>
                             <Icon className="w-4 h-4 mr-2" />
                             All {category.name}
-                          </DropdownMenuItem>
-                        </Link>
-                        <Link href={`/category/${category.slug}?filter=popular`}>
-                          <DropdownMenuItem>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href={`/category/${category.slug}?filter=popular`}>
                             <TrendingUp className="w-4 h-4 mr-2" />
                             Popular {category.name}
-                          </DropdownMenuItem>
-                        </Link>
-                        <Link href={`/category/${category.slug}?filter=latest`}>
-                          <DropdownMenuItem>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href={`/category/${category.slug}?filter=latest`}>
                             <BookOpen className="w-4 h-4 mr-2" />
                             Latest {category.name}
-                          </DropdownMenuItem>
-                        </Link>
+                          </Link>
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   );
