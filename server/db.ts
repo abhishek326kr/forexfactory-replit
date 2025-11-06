@@ -11,9 +11,20 @@ const globalForPrisma = globalThis as unknown as {
   };
 };
 
+// Add connection timeout to DATABASE_URL for Neon scale-to-zero support
+const getDatabaseUrl = () => {
+  let dbUrl = process.env.DATABASE_URL;
+  if (dbUrl && !dbUrl.includes('connect_timeout')) {
+    const separator = dbUrl.includes('?') ? '&' : '?';
+    dbUrl = `${dbUrl}${separator}connect_timeout=15`;
+  }
+  return dbUrl;
+};
+
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  datasourceUrl: process.env.DATABASE_URL,
+  log: process.env.NODE_ENV === 'development' ? ['warn'] : ['error'],
+  datasourceUrl: getDatabaseUrl(),
+  errorFormat: 'minimal',
 });
 
 if (process.env.NODE_ENV !== 'production') {
@@ -37,17 +48,33 @@ export const getDatabaseStatus = () => globalForPrisma.dbStatus;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper function to handle database connection with retry logic
-export async function connectDB(maxRetries = 5): Promise<boolean> {
+export async function connectDB(maxRetries = 2): Promise<boolean> {
   const baseDelay = 1000; // Start with 1 second
   let lastError: any;
+  
+  // Only attempt connection if DATABASE_URL is set
+  if (!process.env.DATABASE_URL) {
+    console.log('ℹ️ DATABASE_URL not set - using in-memory storage');
+    globalForPrisma.dbStatus = {
+      connected: false,
+      lastCheck: new Date(),
+      lastError: 'DATABASE_URL not configured',
+      retryCount: 0
+    };
+    return false;
+  }
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`🔄 Database connection attempt ${attempt}/${maxRetries}...`);
-      console.log('📊 Database URL:', process.env.DATABASE_URL ? 'Set (hidden for security)' : 'Not set');
       
-      // Test the connection
-      await prisma.$connect();
+      // Test the connection with a timeout
+      const connectPromise = prisma.$connect();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timeout')), 5000)
+      );
+      
+      await Promise.race([connectPromise, timeoutPromise]);
       
       // Verify connection with a simple query
       await prisma.$queryRaw`SELECT 1`;
@@ -63,7 +90,6 @@ export async function connectDB(maxRetries = 5): Promise<boolean> {
       return true;
     } catch (error: any) {
       lastError = error;
-      console.error(`❌ Connection attempt ${attempt} failed:`, error.message);
       
       // Update status
       globalForPrisma.dbStatus = {
@@ -74,31 +100,19 @@ export async function connectDB(maxRetries = 5): Promise<boolean> {
       };
       
       if (attempt < maxRetries) {
-        // Calculate exponential backoff delay with jitter
-        const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
-        console.log(`⏳ Waiting ${Math.round(delay / 1000)}s before retry...`);
+        // Short delay before retry
+        const delay = baseDelay * attempt;
+        console.log(`⏳ Retrying in ${delay / 1000}s...`);
         await sleep(delay);
       }
     }
   }
   
-  // All attempts failed
-  console.error('❌ All database connection attempts failed:');
-  console.error('  Error message:', lastError?.message);
-  console.error('  Error code:', lastError?.code);
-  
-  if (lastError?.message?.includes("Can't reach database server")) {
-    console.error('  💡 Check if the database server is running and accessible');
-    console.error('  💡 Verify the DATABASE_URL environment variable');
-    console.error('  💡 Ensure @ symbols are encoded as %40 in the password');
-  }
-  
-  // Don't exit in development, allow app to run with limited functionality
-  if (process.env.NODE_ENV === 'production') {
-    console.error('⚠️ Running in production mode - would normally exit, but continuing with degraded functionality');
-  } else {
-    console.warn('⚠️ Running in development mode with database unavailable - some features will not work');
-  }
+  // All attempts failed - log once and continue with in-memory storage
+  console.warn('⚠️ Database connection failed - falling back to in-memory storage');
+  console.log(`   Last error: ${lastError?.message}`);
+  console.log('ℹ️ The application will continue with limited functionality.');
+  console.log('   In-memory storage will be used for data persistence.');
   
   return false;
 }
@@ -171,13 +185,16 @@ export async function disconnectDB() {
   await prisma.$disconnect();
 }
 
-// Periodic health check (every 30 seconds)
+// Periodic health check (disabled when database is not connected)
 if (process.env.NODE_ENV !== 'test') {
   setInterval(async () => {
-    try {
-      await isDatabaseConnected();
-    } catch (error) {
-      // Silently handle health check errors
+    // Only check if we think we're connected to avoid spamming logs
+    if (globalForPrisma.dbStatus.connected) {
+      try {
+        await isDatabaseConnected();
+      } catch (error) {
+        // Silently handle health check errors
+      }
     }
   }, 30000);
 }

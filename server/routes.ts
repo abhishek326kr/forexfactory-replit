@@ -1487,12 +1487,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/categories - Get all categories with hierarchy
   app.get("/api/categories", async (req: Request, res: Response) => {
     try {
-      const categories = await prisma.category.findMany({
-        orderBy: { name: 'asc' }
-      });
+      // Use storage interface which handles both Prisma and in-memory storage
+      const result = await storage.getAllCategories();
       
       // Format response
-      const formattedCategories = categories.map(cat => ({
+      const formattedCategories = result.data.map(cat => ({
         id: cat.categoryId.toString(),
         name: cat.name,
         slug: cat.name.toLowerCase().replace(/\s+/g, '-'),
@@ -1506,7 +1505,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(formattedCategories);
     } catch (error) {
       console.error("Error fetching categories:", error);
-      res.status(500).json({ error: "Failed to fetch categories" });
+      // Return empty array when storage is unavailable
+      res.json([]);
     }
   });
 
@@ -1515,12 +1515,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { slug } = req.params;
       
-      // Find category by name (using name as slug)
-      const category = await prisma.category.findFirst({
-        where: { 
-          name: slug.replace(/-/g, ' ') // Convert slug back to name
-        }
-      });
+      // Find category by slug using storage interface
+      const categoryName = slug.replace(/-/g, ' '); // Convert slug back to name
+      const allCategories = await storage.getAllCategories();
+      const category = allCategories.data.find(cat => 
+        cat.name.toLowerCase().replace(/\s+/g, '-') === slug
+      );
       
       if (!category) {
         return res.status(404).json({ error: "Category not found" });
@@ -3591,6 +3591,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ==================== OBJECT STORAGE ROUTES ====================
   
+  // POST /api/upload - Get presigned URL for general file uploads (no auth required)
+  app.post("/api/upload", async (req: Request, res: Response) => {
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL });
+    } catch (error: any) {
+      console.error("Error getting upload URL:", error);
+      res.status(500).json({ error: "Failed to get upload URL", message: error.message });
+    }
+  });
+
+  // POST /api/upload/complete - After upload is complete, set ACL and return normalized path
+  app.post("/api/upload/complete", async (req: Request, res: Response) => {
+    try {
+      if (!req.body.uploadURL) {
+        return res.status(400).json({ error: "uploadURL is required" });
+      }
+
+      const userId = req.user?.id || 'anonymous';
+      const objectStorageService = new ObjectStorageService();
+      
+      // Set ACL policy to make the image public
+      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
+        req.body.uploadURL,
+        {
+          owner: userId,
+          visibility: "public", // Public for uploaded images
+          aclRules: []
+        }
+      );
+
+      res.status(200).json({
+        success: true,
+        objectPath: objectPath,
+        // Construct the public URL for the image
+        publicUrl: objectPath
+      });
+    } catch (error: any) {
+      console.error("Error setting ACL policy:", error);
+      res.status(500).json({ error: "Failed to complete upload", message: error.message });
+    }
+  });
+
   // POST /api/admin/upload - Get presigned URL for direct upload to object storage
   app.post("/api/admin/upload", requireAdmin, async (req: Request, res: Response) => {
     try {

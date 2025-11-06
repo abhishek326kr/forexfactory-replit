@@ -79,10 +79,10 @@ export function ObjectUploader({
     setError("");
 
     try {
-      // Get upload parameters
+      // Step 1: Get upload parameters from the server
       const params = await onGetUploadParameters();
       
-      // Create form data
+      // Step 2: Upload file directly to object storage using presigned URL
       const xhr = new XMLHttpRequest();
       
       // Track upload progress
@@ -94,23 +94,44 @@ export function ObjectUploader({
       });
 
       // Handle completion
-      xhr.onload = function() {
+      xhr.onload = async function() {
         if (xhr.status === 200 || xhr.status === 204) {
-          setUploadSuccess(true);
-          // Simulate the Uppy result structure
-          const result = {
-            successful: [{
-              uploadURL: params.url,
-              response: { body: { url: params.url.split('?')[0] } }
-            }]
-          };
-          onComplete?.(result);
-          
-          // Close modal after short delay
-          setTimeout(() => {
-            setShowModal(false);
-            resetState();
-          }, 1000);
+          try {
+            // Step 3: Notify server that upload is complete and get public URL
+            const response = await fetch('/api/upload/complete', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                uploadURL: params.url
+              })
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              setUploadSuccess(true);
+              
+              // Return the result in the expected format
+              const result = {
+                successful: [{
+                  uploadURL: params.url,
+                  response: { body: { url: data.publicUrl || data.objectPath } }
+                }]
+              };
+              onComplete?.(result);
+              
+              // Close modal after short delay
+              setTimeout(() => {
+                setShowModal(false);
+                resetState();
+              }, 1000);
+            } else {
+              setError('Failed to finalize upload. Please try again.');
+            }
+          } catch (err) {
+            setError('Failed to complete upload process.');
+          }
         } else {
           setError('Upload failed. Please try again.');
         }
@@ -118,16 +139,17 @@ export function ObjectUploader({
       };
 
       xhr.onerror = function() {
-        setError('Upload failed. Please try again.');
+        setError('Upload failed. Please check your connection and try again.');
         setUploading(false);
       };
 
-      // Send the file
+      // Send the file to object storage
       xhr.open(params.method, params.url);
       xhr.setRequestHeader('Content-Type', selectedFile.type);
       xhr.send(selectedFile);
       
     } catch (err) {
+      console.error('Upload error:', err);
       setError('Failed to upload file. Please try again.');
       setUploading(false);
     }
