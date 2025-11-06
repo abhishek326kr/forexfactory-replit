@@ -12,6 +12,23 @@ ForexFactory.cc is a professional Forex trading platform that serves as a compre
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (November 6, 2025)
+
+### Data Storage & Database Integration
+- **PostgreSQL Database Provisioned**: Connected to Replit's managed PostgreSQL (Neon-backed)
+- **Graceful Fallback System**: Application automatically falls back to in-memory storage when database is unavailable
+- **Improved Error Handling**: Reduced retry attempts and added clear status messages for storage state
+- **Object Storage Integration**: Configured Replit's object storage for file uploads with proper ACL support
+- **Fixed Categories API**: Resolved TypeError in categories endpoints caused by incorrect data structure handling
+- **Storage Interface**: Updated to properly handle both PrismaStorage (database) and MemStorage (in-memory) implementations
+
+### Technical Improvements
+- Added connection timeout (15 seconds) to handle Neon's scale-to-zero feature
+- Implemented exponential backoff for database connection retries
+- Suppressed excessive error logging when database is unavailable
+- Added proper object storage routes for file uploads with presigned URLs
+- Updated ObjectUploader component to work with Replit's object storage service
+
 ## System Architecture
 
 ### Frontend Architecture

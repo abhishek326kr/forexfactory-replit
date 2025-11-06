@@ -1488,15 +1488,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/categories", async (req: Request, res: Response) => {
     try {
       // Use storage interface which handles both Prisma and in-memory storage
-      const result = await storage.getAllCategories();
+      const categories = await storage.getAllCategories();
       
       // Format response
-      const formattedCategories = result.data.map(cat => ({
+      const formattedCategories = categories.map(cat => ({
         id: cat.categoryId.toString(),
         name: cat.name,
-        slug: cat.name.toLowerCase().replace(/\s+/g, '-'),
+        slug: cat.slug || cat.name.toLowerCase().replace(/\s+/g, '-'),
         description: cat.description || null,
-        parentId: null, // Categories table doesn't have parent relationships
+        parentId: cat.parentId || null,
         order: 0,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -1516,11 +1516,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { slug } = req.params;
       
       // Find category by slug using storage interface
-      const categoryName = slug.replace(/-/g, ' '); // Convert slug back to name
       const allCategories = await storage.getAllCategories();
-      const category = allCategories.data.find(cat => 
-        cat.name.toLowerCase().replace(/\s+/g, '-') === slug
-      );
+      const category = allCategories.find(cat => {
+        const catSlug = cat.slug || cat.name.toLowerCase().replace(/\s+/g, '-');
+        return catSlug === slug;
+      });
       
       if (!category) {
         return res.status(404).json({ error: "Category not found" });
@@ -1530,9 +1530,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const formattedCategory = {
         id: category.categoryId.toString(),
         name: category.name,
-        slug: category.name.toLowerCase().replace(/\s+/g, '-'),
+        slug: category.slug || category.name.toLowerCase().replace(/\s+/g, '-'),
         description: category.description || null,
-        parentId: null, // Categories table doesn't have parent relationships
+        parentId: category.parentId || null,
         order: 0,
         createdAt: new Date(),
         updatedAt: new Date()
