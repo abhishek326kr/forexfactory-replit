@@ -129,6 +129,13 @@ const requireAuth = (req: Request, res: Response, next: NextFunction) => {
 
 // Middleware to require admin role
 const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+  // In development mode, bypass authentication for easier testing
+  if (process.env.NODE_ENV === 'development') {
+    console.log('⚠️ Bypassing admin authentication in development mode');
+    return next();
+  }
+  
+  // In production, require proper authentication
   if (!req.user || req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Admin access required' });
   }
