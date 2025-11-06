@@ -28,7 +28,7 @@ import BlogList from "@/pages/Admin/BlogList";
 import CategoryList from "@/pages/Admin/CategoryList";
 import UserList from "@/pages/Admin/UserList";
 import MediaManager from "@/pages/Admin/MediaManager";
-import SeoManager from "@/pages/Admin/SeoManager";
+import SEO from "@/pages/Admin/SEO";
 import Analytics from "@/pages/Admin/Analytics";
 import PostEditor from "@/pages/Admin/PostEditor";
 import Settings from "@/pages/Admin/Settings";
@@ -123,10 +123,10 @@ function Router() {
         </ProtectedRoute>
       </Route>
       
-      {/* SEO Manager */}
+      {/* SEO Dashboard */}
       <Route path="/admin/seo">
         <ProtectedRoute requireAdmin={true}>
-          <SeoManager />
+          <SEO />
         </ProtectedRoute>
       </Route>
       

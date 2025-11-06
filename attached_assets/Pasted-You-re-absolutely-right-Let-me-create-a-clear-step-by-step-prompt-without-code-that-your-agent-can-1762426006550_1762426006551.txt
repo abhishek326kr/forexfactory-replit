@@ -1,0 +1,431 @@
+You're absolutely right! Let me create a clear, step-by-step prompt without code that your agent can follow. Here's the proper prompt:
+
+***
+
+# 🎯 **COMPREHENSIVE AGENT PROMPT: Download Gating System with Email Notifications**
+
+## **PROJECT CONTEXT**
+This is the ForexFactory.cc blog platform. We need to implement a complete download protection system where users must create an account and login before downloading files (Expert Advisors, Indicators, Templates) from blog posts. Additionally, implement automated email notifications for welcome messages and new blog alerts.
+
+***
+
+## **📋 STEP-BY-STEP IMPLEMENTATION REQUIREMENTS**
+
+***
+
+### **PHASE 1: DATABASE SCHEMA UPDATES**
+
+#### **Step 1.1: Add Download Fields to Posts Table**
+Add these new columns to the existing `posts` table in `shared/schema.ts`:
+- `hasDownload` (boolean, default false) - indicates if post has downloadable content
+- `downloadTitle` (text) - title of the download (e.g., "Advanced Scalping EA v2.0")
+- `downloadDescription` (text) - brief description of what user will download
+- `downloadFileName` (text) - actual file name
+- `downloadFileUrl` (text) - storage URL where file is stored
+- `downloadFileSize` (text) - human-readable size (e.g., "2.5 MB")
+- `downloadVersion` (text) - version number (e.g., "v2.0.1")
+- `downloadType` (text) - type of download: EA, Indicator, Template, Tool, or Other
+- `downloadCount` (integer, default 0) - total number of downloads
+- `requiresLogin` (boolean, default true) - whether login is required to download
+
+#### **Step 1.2: Create Downloads Tracking Table**
+Create a new `downloads` table to track who downloaded what:
+- `id` (primary key)
+- `userId` (foreign key to users table)
+- `postId` (foreign key to posts table)
+- `downloadedAt` (timestamp)
+- `ipAddress` (text) - user's IP address
+- `userAgent` (text) - user's browser info
+
+#### **Step 1.3: Add Email Preferences to Users Table**
+Add these columns to the `users` table:
+- `emailVerified` (boolean, default false)
+- `emailVerificationToken` (text, nullable)
+- `subscribeToNewPosts` (boolean, default true) - opt-in for new blog notifications
+- `subscribeToWeeklyDigest` (boolean, default false)
+- `lastEmailSentAt` (timestamp, nullable)
+
+#### **Step 1.4: Create Email Notifications Table**
+Create new `emailNotifications` table to track sent emails:
+- `id` (primary key)
+- `userId` (foreign key to users)
+- `emailType` (text) - "welcome", "new_post", "weekly_digest"
+- `postId` (foreign key to posts, nullable)
+- `sentAt` (timestamp)
+- `status` (text) - "sent", "failed", "pending"
+- `errorMessage` (text, nullable)
+
+***
+
+### **PHASE 2: ADMIN PANEL - BLOG EDITOR ENHANCEMENTS**
+
+#### **Step 2.1: Add Download Configuration Section**
+In the admin blog post editor page (`client/src/pages/admin/BlogEditor.tsx` or similar):
+
+**Add a new collapsible section titled "📥 Download Configuration" that includes:**
+1. Checkbox: "This post includes a downloadable file"
+2. When checkbox is checked, show these fields:
+   - **Download Title** (required text field) - e.g., "Advanced Scalping EA v2.0"
+   - **Download Description** (textarea) - brief description
+   - **Download Type** (dropdown) - Options: Expert Advisor (EA), Indicator, Template, Trading Tool, Other
+   - **Version** (text field) - e.g., "v2.0.1"
+   - **Upload File** (file input) - Accept: .ex4, .ex5, .mq4, .mq5, .zip, .rar, .tpl (Max: 50MB)
+   - **File Size** (auto-calculated and displayed after upload)
+   - Checkbox: "Require user login to download" (checked by default)
+
+#### **Step 2.2: File Upload Handler**
+When admin uploads a file:
+1. Validate file type and size
+2. Upload to object storage (or local uploads folder for development)
+3. Store the file URL in the database
+4. Auto-calculate and display file size
+5. Show success message with file details
+
+***
+
+### **PHASE 3: FRONTEND - BLOG POST PAGE DOWNLOAD SECTION**
+
+#### **Step 3.1: Create Download Section Component**
+Create a new reusable component `DownloadSection.tsx` that displays on blog post pages when `hasDownload` is true.
+
+**The component should show:**
+1. **Download Card with:**
+   - Icon representing download type (📥 EA, 📊 Indicator, etc.)
+   - Download title in large text
+   - Download description
+   - Metadata row showing:
+     - Version (if available)
+     - File size
+     - Total download count (e.g., "1,234 downloads")
+
+2. **Download Button that:**
+   - Shows "⬇️ Download Now" if user is logged in
+   - Shows "🔒 Login to Download" if user is not logged in
+   - Shows "⏳ Downloading..." when download is in progress
+   - Is disabled during download process
+
+3. **Behavior:**
+   - If user is NOT logged in and clicks button → Show login/signup modal
+   - If user IS logged in and clicks button → Trigger file download immediately
+   - After successful download → Update download count displayed
+
+#### **Step 3.2: Style the Download Section**
+Make it visually prominent:
+- Use a distinct colored box (e.g., blue or green gradient)
+- Make it stand out from the blog content
+- Position it strategically (after first paragraph or at the end of post)
+- Mobile responsive design
+- Add hover effects on the download button
+
+***
+
+### **PHASE 4: USER AUTHENTICATION SYSTEM**
+
+#### **Step 4.1: Create Login/Signup Modal**
+Create a modal component `LoginModal.tsx` that can switch between login and signup modes.
+
+**Signup Form Fields:**
+1. Name (required)
+2. Email (required, validated)
+3. Password (required, minimum 6 characters)
+4. Checkbox: "Subscribe to new blog post notifications" (checked by default)
+5. Checkbox: "I agree to the Terms & Privacy Policy" (required)
+
+**Login Form Fields:**
+1. Email (required)
+2. Password (required)
+3. "Forgot password?" link
+
+**Modal Features:**
+- Toggle between "Login" and "Sign Up" modes with a button
+- Show validation errors clearly
+- Display loading state during submission
+- Show success message
+- Auto-close and redirect after successful login
+- Remember intended action (download) and execute after login
+
+#### **Step 4.2: Backend Authentication Endpoints**
+Create or update these API endpoints in `server/routes.ts`:
+
+**POST `/api/auth/signup`**
+- Accept: name, email, password, subscribeToNewPosts
+- Validate email format and password strength
+- Check if email already exists
+- Hash password using bcrypt
+- Create user in database
+- Generate email verification token
+- Send welcome email (see Phase 5)
+- Return success response
+
+**POST `/api/auth/login`**
+- Accept: email, password
+- Validate credentials
+- Create session
+- Set secure HTTP-only cookie
+- Return user data (without password)
+
+**POST `/api/auth/logout`**
+- Clear session
+- Clear cookie
+- Return success
+
+**GET `/api/auth/me`**
+- Check if user is authenticated
+- Return current user data or null
+
+***
+
+### **PHASE 5: EMAIL NOTIFICATION SYSTEM**
+
+#### **Step 5.1: Create Email Service Module**
+Create new file `server/services/email-service.ts`
+
+**Configure SMTP with these exact settings:**
+```
+Host: smtp.hostinger.com
+Port: 465
+Security: SSL
+Email: noreply@forexfactory.cc
+Password: YoForex@101
+```
+
+#### **Step 5.2: Implement Email Templates**
+
+Create professional HTML email templates for:
+
+**A. Welcome Email (sent immediately after signup)**
+- Subject: "Welcome to ForexFactory - Your Free Forex Resources Await!"
+- Content:
+  - Welcome message with user's name
+  - Brief introduction to the platform
+  - Links to popular resources
+  - Call-to-action to browse latest EAs and indicators
+  - Footer with social media links
+  - Unsubscribe link
+
+**B. New Blog Post Notification (sent when admin publishes new post)**
+- Subject: "New: [Post Title] - ForexFactory"
+- Content:
+  - Eye-catching post thumbnail image
+  - Post title (clickable link)
+  - Brief excerpt (first 150 characters)
+  - Category and tags
+  - "Read More" button linking to post
+  - If post has download → Highlight "Includes FREE download"
+  - Footer with unsubscribe option
+
+**C. Email Verification (sent after signup)**
+- Subject: "Verify Your Email - ForexFactory"
+- Content:
+  - Verification code or link
+  - Expires in 24 hours
+  - Instructions to verify
+
+#### **Step 5.3: Email Sending Functions**
+Create these functions in the email service:
+
+**`sendWelcomeEmail(user)`**
+- Trigger: Immediately after user signup
+- Send personalized welcome email
+- Log to emailNotifications table
+
+**`sendNewPostNotification(post, subscribers)`**
+- Trigger: When admin publishes a new blog post
+- Send to all users where `subscribeToNewPosts = true`
+- Batch send (don't send all at once, use queue)
+- Rate limit: max 100 emails per minute
+- Log each sent email
+
+**`sendEmailVerification(user, token)`**
+- Send verification link
+- Include expiry time
+
+#### **Step 5.4: Email Queue System**
+Implement a simple email queue to avoid overwhelming SMTP:
+- When new post is published, add email jobs to queue
+- Process queue in background (send 100 emails per minute)
+- Retry failed emails after 5 minutes (max 3 attempts)
+- Update status in emailNotifications table
+
+***
+
+### **PHASE 6: DOWNLOAD ENDPOINT WITH AUTHENTICATION**
+
+#### **Step 6.1: Create Protected Download Endpoint**
+Create endpoint: **POST `/api/downloads/:postId`**
+
+**This endpoint should:**
+1. Check if user is authenticated (session/cookie)
+2. If not authenticated → Return 401 error with message "Login required"
+3. If authenticated:
+   - Get post details from database
+   - Verify post has download available
+   - Check if download requires login
+   - Fetch file from storage (object storage or local)
+   - Track download in `downloads` table (userId, postId, timestamp, IP, user agent)
+   - Increment `downloadCount` in posts table by 1
+   - Set proper headers for file download
+   - Stream file to user's browser
+4. Handle errors gracefully
+
+#### **Step 6.2: Download Security**
+Implement these security measures:
+- Verify file exists before attempting download
+- Prevent direct URL access (use temporary signed URLs if using object storage)
+- Rate limiting: max 5 downloads per user per minute
+- Log suspicious download patterns
+- Scan uploaded files for malware (optional but recommended)
+
+***
+
+### **PHASE 7: ADMIN DASHBOARD ENHANCEMENTS**
+
+#### **Step 7.1: Add Email Management Section**
+In admin dashboard, create new section "📧 Email Management":
+
+**Show statistics:**
+- Total subscribers count
+- Welcome emails sent today
+- New post notifications sent today
+- Failed emails count
+- Recent email activity log (last 20)
+
+**Provide actions:**
+- Button: "Test Email Configuration" (sends test email to admin)
+- Button: "Send Test New Post Notification" (to admin only)
+- View email templates
+- Edit email templates (advanced)
+
+#### **Step 7.2: Add Downloads Analytics**
+In admin dashboard, show:
+- Total downloads across all posts
+- Most downloaded files (top 10)
+- Downloads chart (last 30 days)
+- Recent downloads list with user info
+- Export downloads data to CSV
+
+#### **Step 7.3: Enhance Blog Post List**
+In admin posts list, show:
+- Download icon (📥) next to posts that have downloads
+- Download count for each post
+- Clicking icon shows download details modal
+
+***
+
+### **PHASE 8: NOTIFICATION TRIGGERS**
+
+#### **Step 8.1: Trigger Welcome Email**
+In the signup endpoint, after successful user creation:
+1. Generate unique verification token
+2. Call `sendWelcomeEmail(user)` function
+3. Call `sendEmailVerification(user, token)` function
+4. Don't wait for email to send (async/background)
+5. Log any errors
+
+#### **Step 8.2: Trigger New Post Notification**
+In the blog publish endpoint (`POST /api/admin/posts` or `PUT /api/admin/posts/:id`):
+1. After successfully publishing post
+2. Get all users where `subscribeToNewPosts = true`
+3. Add email jobs to queue: `sendNewPostNotification(post, subscribers)`
+4. Process queue in background
+5. Don't block the publish response
+
+#### **Step 8.3: Implement Unsubscribe System**
+Create endpoint: **GET `/api/email/unsubscribe/:token`**
+- Decode token to get userId and email type
+- Update user preferences in database
+- Show confirmation page
+- Send confirmation email
+
+***
+
+### **PHASE 9: USER PREFERENCES & SETTINGS**
+
+#### **Step 9.1: Create User Settings Page**
+Create page `/settings` or `/account/settings` where logged-in users can:
+- Update their name and email
+- Change password
+- Manage email preferences:
+  - Toggle: "Email me when new blog posts are published"
+  - Toggle: "Send me weekly digest of top posts"
+- View their download history
+- Delete account option
+
+#### **Step 9.2: Email Preference Management**
+Create endpoint: **PUT `/api/user/preferences`**
+- Update `subscribeToNewPosts` flag
+- Update `subscribeToWeeklyDigest` flag
+- Return updated preferences
+- Send confirmation email about changes
+
+***
+
+### **PHASE 10: TESTING & VALIDATION**
+
+#### **Step 10.1: Test Complete Flow**
+1. **Test Signup Flow:**
+   - Create new account
+   - Verify welcome email received
+   - Check email content and formatting
+   - Verify user can login
+
+2. **Test Download Flow:**
+   - Visit blog post with download as guest → See "Login to Download"
+   - Click download → Login modal appears
+   - Create account → Auto-login → Download starts immediately
+   - Verify file downloads correctly
+   - Check download is tracked in database
+
+3. **Test New Post Notification:**
+   - Create and publish new blog post with download
+   - Verify all subscribed users receive email
+   - Check email content is correct
+   - Verify unsubscribe link works
+
+4. **Test Email Configuration:**
+   - Send test emails to verify SMTP works
+   - Check emails don't go to spam
+   - Verify all links in emails work
+   - Test on multiple email clients (Gmail, Outlook, etc.)
+
+#### **Step 10.2: Security Testing**
+- Try accessing download endpoint without authentication
+- Try downloading files directly via URL (should fail)
+- Test SQL injection on login form
+- Test XSS on signup form
+- Verify passwords are hashed in database
+- Check session security
+
+#### **Step 10.3: Performance Testing**
+- Test with 1000+ subscriber list
+- Verify email queue doesn't crash
+- Check database performance with many downloads
+- Monitor memory usage during bulk email sending
+
+***
+
+### **PHASE 11: ERROR HANDLING & MONITORING**
+
+#### **Step 11.1: Implement Error Logging**
+Log these events:
+- Failed email sends (with reason)
+- Failed downloads
+- Authentication errors
+- File upload errors
+- SMTP connection issues
+
+#### **Step 11.2: Admin Alerts**
+Send alert to admin when:
+- Email sending fails 10+ times in a row
+- SMTP connection is down
+- Download endpoint returns errors
+- Suspicious activity detected (many failed logins)
+
+***
+
+## **🎯 SUCCESS CRITERIA**
+
+The implementation is complete when:
+- ✅ Admins can add download links to blog posts via editor
+- ✅ Download button appears on blog post pages
+- ✅
