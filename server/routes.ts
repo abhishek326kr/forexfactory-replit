@@ -49,7 +49,7 @@ import {
   ObjectNotFoundError,
 } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
-import { indexingService } from "./services/indexing-service";
+import { indexingService } from "./seo/indexing-service";
 import { aiSeoService } from "./services/ai-seo-service";
 import { SeoService } from "./services/seo-service";
 import { seoService } from "./seo/index";
