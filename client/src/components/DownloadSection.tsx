@@ -74,14 +74,17 @@ export default function DownloadSection({
     }
   };
 
-  // Track download mutation
+  // Track download mutation - now uses protected endpoint
   const trackDownloadMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('POST', `/api/blogs/${blogId}/download`);
+      const response = await apiRequest('POST', `/api/downloads/${blogId}`);
+      const data = await response.json();
+      return data;
     },
     onSuccess: () => {
       // Invalidate blog query to update download count
       queryClient.invalidateQueries({ queryKey: ['/api/blogs/slug'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/blogs', blogId] });
     }
   });
 
@@ -89,35 +92,72 @@ export default function DownloadSection({
     setIsDownloading(true);
     
     try {
-      // Track the download
-      await trackDownloadMutation.mutateAsync();
+      // Call the protected download endpoint
+      const result = await trackDownloadMutation.mutateAsync();
       
-      // Create a temporary link and click it to download
-      const link = document.createElement('a');
-      link.href = downloadFileUrl;
-      link.download = downloadFileName || 'download';
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      if (result.downloadUrl) {
+        // If we get a download URL in response, download it
+        const link = document.createElement('a');
+        link.href = result.downloadUrl;
+        link.download = result.fileName || downloadFileName || 'download';
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setDownloadComplete(true);
+        
+        toast({
+          title: 'Download Started',
+          description: `Downloading ${result.fileName || downloadFileName || 'file'}...`,
+        });
+        
+        // Reset download complete state after 3 seconds
+        setTimeout(() => {
+          setDownloadComplete(false);
+        }, 3000);
+      } else {
+        // Handle case where download is served directly by the endpoint
+        setDownloadComplete(true);
+        
+        toast({
+          title: 'Download Complete',
+          description: 'Your file has been downloaded successfully.',
+        });
+        
+        setTimeout(() => {
+          setDownloadComplete(false);
+        }, 3000);
+      }
       
-      setDownloadComplete(true);
-      
-      toast({
-        title: 'Download Started',
-        description: `Downloading ${downloadFileName || 'file'}...`,
-      });
-      
-      // Reset download complete state after 3 seconds
-      setTimeout(() => {
-        setDownloadComplete(false);
-      }, 3000);
-      
-    } catch (error) {
+    } catch (error: any) {
       console.error('Download error:', error);
+      
+      // Handle specific error messages
+      let errorMessage = 'There was an error downloading the file. Please try again.';
+      
+      if (error.message?.includes('Login required')) {
+        errorMessage = 'Please log in to download this file.';
+        // Open login modal if not authenticated
+        if (!isAuthenticated) {
+          openLoginModal('login', {
+            type: 'download',
+            postId: blogId,
+            payload: {
+              downloadTitle,
+              downloadFileName,
+              downloadFileUrl
+            },
+            callback: performDownload
+          });
+        }
+      } else if (error.message?.includes('Too many download attempts')) {
+        errorMessage = 'Too many download attempts. Please wait a minute and try again.';
+      }
+      
       toast({
         title: 'Download Failed',
-        description: 'There was an error downloading the file. Please try again.',
+        description: errorMessage,
         variant: 'destructive'
       });
     } finally {

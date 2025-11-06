@@ -36,6 +36,8 @@ import SignalList from "@/pages/Admin/SignalList";
 import SignalEditor from "@/pages/Admin/SignalEditor";
 import SignalUploader from "@/pages/Admin/SignalUploader";
 import SignalDetail from "@/pages/SignalDetail";
+import EmailManagement from "@/pages/Admin/EmailManagement";
+import DownloadAnalytics from "@/pages/Admin/DownloadAnalytics";
 
 function Router() {
   return (
@@ -120,6 +122,20 @@ function Router() {
       <Route path="/admin/analytics">
         <ProtectedRoute requireAdmin={true}>
           <Analytics />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* Email Management */}
+      <Route path="/admin/email-management">
+        <ProtectedRoute requireAdmin={true}>
+          <EmailManagement />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* Download Analytics */}
+      <Route path="/admin/download-analytics">
+        <ProtectedRoute requireAdmin={true}>
+          <DownloadAnalytics />
         </ProtectedRoute>
       </Route>
       

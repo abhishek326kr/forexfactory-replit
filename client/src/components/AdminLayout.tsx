@@ -31,7 +31,9 @@ import {
   Image,
   Search,
   Plus,
-  List
+  List,
+  Mail,
+  TrendingUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -90,6 +92,16 @@ const navItems: NavItem[] = [
     title: 'Analytics',
     href: '/admin/analytics',
     icon: BarChart3
+  },
+  {
+    title: 'Email Management',
+    href: '/admin/email-management',
+    icon: Mail
+  },
+  {
+    title: 'Download Analytics',
+    href: '/admin/download-analytics',
+    icon: Download
   },
   {
     title: 'SEO',

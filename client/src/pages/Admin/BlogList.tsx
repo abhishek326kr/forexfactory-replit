@@ -43,7 +43,9 @@ import {
   CheckCircle,
   XCircle,
   Archive,
-  Filter
+  Filter,
+  Download,
+  Package
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -61,12 +63,16 @@ interface Blog {
   tags: string[];
   excerpt?: string;
   featuredImage?: string;
+  hasDownload?: boolean;
+  downloadCount?: number;
+  downloadType?: string;
 }
 
 export default function BlogList() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [downloadFilter, setDownloadFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const itemsPerPage = 10;
@@ -75,7 +81,8 @@ export default function BlogList() {
   const { data: blogsData, isLoading, error } = useQuery({
     queryKey: ['/api/admin/blogs', { 
       search: searchTerm, 
-      status: statusFilter, 
+      status: statusFilter,
+      hasDownload: downloadFilter,
       page: currentPage, 
       limit: itemsPerPage 
     }],
@@ -83,6 +90,7 @@ export default function BlogList() {
       const params = new URLSearchParams({
         ...(searchTerm && { search: searchTerm }),
         ...(statusFilter !== 'all' && { status: statusFilter }),
+        ...(downloadFilter !== 'all' && { hasDownload: downloadFilter }),
         page: currentPage.toString(),
         limit: itemsPerPage.toString()
       });
@@ -176,6 +184,11 @@ export default function BlogList() {
     setCurrentPage(1);
   };
 
+  const handleDownloadFilter = (value: string) => {
+    setDownloadFilter(value);
+    setCurrentPage(1);
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'published':
@@ -232,6 +245,17 @@ export default function BlogList() {
               <SelectItem value="archived">Archived</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={downloadFilter} onValueChange={handleDownloadFilter}>
+            <SelectTrigger className="w-full sm:w-44" data-testid="select-download-filter">
+              <Package className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="All Posts" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Posts</SelectItem>
+              <SelectItem value="true">Posts with Downloads</SelectItem>
+              <SelectItem value="false">Posts without Downloads</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <Link href="/admin/editor">
           <Button data-testid="button-new-blog">
@@ -242,7 +266,7 @@ export default function BlogList() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4 mb-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-6">
         <Card data-testid="stat-total-posts">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Posts</CardTitle>
@@ -277,6 +301,19 @@ export default function BlogList() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{blogsData?.stats?.totalViews || 0}</div>
+          </CardContent>
+        </Card>
+        <Card data-testid="stat-with-downloads">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">With Downloads</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <Download className="h-5 w-5 text-blue-600" />
+              <div className="text-2xl font-bold text-blue-600">
+                {blogsData?.stats?.withDownloads || 0}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -328,6 +365,7 @@ export default function BlogList() {
                       <TableHead>Categories</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Views</TableHead>
+                      <TableHead>Downloads</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead>Featured</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -368,6 +406,16 @@ export default function BlogList() {
                             <Eye className="h-3 w-3 text-muted-foreground" />
                             <span className="text-sm">{blog.views}</span>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {blog.hasDownload ? (
+                            <div className="flex items-center gap-1">
+                              <Download className="h-4 w-4 text-blue-600" />
+                              <span className="text-sm font-medium">{blog.downloadCount || 0}</span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm">
                           {format(new Date(blog.createdAt), 'MMM dd, yyyy')}
