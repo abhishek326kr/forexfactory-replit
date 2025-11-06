@@ -46,7 +46,7 @@ export default function DownloadSection({
   requiresLogin = true,
   blogId
 }: DownloadSectionProps) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, openLoginModal } = useAuth();
   const { toast } = useToast();
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadComplete, setDownloadComplete] = useState(false);
@@ -85,24 +85,7 @@ export default function DownloadSection({
     }
   });
 
-  const handleDownload = async () => {
-    // Check if login is required
-    if (requiresLogin && !isAuthenticated) {
-      toast({
-        title: 'Login Required',
-        description: 'Please login to download this file',
-        variant: 'default',
-        action: (
-          <Link href="/login">
-            <Button variant="outline" size="sm">
-              Login
-            </Button>
-          </Link>
-        )
-      });
-      return;
-    }
-
+  const performDownload = async () => {
     setIsDownloading(true);
     
     try {
@@ -140,6 +123,27 @@ export default function DownloadSection({
     } finally {
       setIsDownloading(false);
     }
+  };
+
+  const handleDownload = async () => {
+    // Check if login is required
+    if (requiresLogin && !isAuthenticated) {
+      // Open login modal with download intent
+      openLoginModal('login', {
+        type: 'download',
+        postId: blogId,
+        payload: {
+          downloadTitle,
+          downloadFileName,
+          downloadFileUrl
+        },
+        callback: performDownload
+      });
+      return;
+    }
+
+    // User is authenticated, proceed with download
+    await performDownload();
   };
 
   const formatDownloadCount = (count: number) => {
@@ -203,43 +207,39 @@ export default function DownloadSection({
 
             {/* Download Button Section */}
             <div className="flex items-center">
-              {requiresLogin && !isAuthenticated ? (
-                <Link href="/login">
-                  <Button 
-                    size="lg" 
-                    className="w-full md:w-auto bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg"
-                    data-testid="button-login-to-download"
-                  >
+              <Button 
+                size="lg"
+                onClick={handleDownload}
+                disabled={isDownloading}
+                className={`w-full md:w-auto shadow-lg disabled:opacity-50 ${
+                  requiresLogin && !isAuthenticated
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white'
+                    : 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white'
+                }`}
+                data-testid={requiresLogin && !isAuthenticated ? "button-login-to-download" : "button-download"}
+              >
+                {requiresLogin && !isAuthenticated ? (
+                  <>
                     <Lock className="mr-2 h-5 w-5" />
                     Login to Download
-                  </Button>
-                </Link>
-              ) : (
-                <Button 
-                  size="lg"
-                  onClick={handleDownload}
-                  disabled={isDownloading}
-                  className="w-full md:w-auto bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg disabled:opacity-50"
-                  data-testid="button-download"
-                >
-                  {isDownloading ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Downloading...
-                    </>
-                  ) : downloadComplete ? (
-                    <>
-                      <CheckCircle className="mr-2 h-5 w-5" />
-                      Downloaded!
-                    </>
-                  ) : (
-                    <>
-                      <Download className="mr-2 h-5 w-5" />
-                      Download Now
-                    </>
-                  )}
-                </Button>
-              )}
+                  </>
+                ) : isDownloading ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Downloading...
+                  </>
+                ) : downloadComplete ? (
+                  <>
+                    <CheckCircle className="mr-2 h-5 w-5" />
+                    Downloaded!
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-5 w-5" />
+                    Download Now
+                  </>
+                )}
+              </Button>
             </div>
           </div>
 

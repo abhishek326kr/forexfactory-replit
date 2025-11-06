@@ -19,6 +19,7 @@ import {
   insertAdminSchema,
   type User
 } from "@shared/schema";
+import { queueWelcomeEmail, queueVerificationEmail } from "./services/email-queue";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import session from "express-session";
@@ -537,6 +538,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/indexnow-key.txt", seoService.handlers.indexNowKey);
 
   // ==================== AUTHENTICATION ENDPOINTS ====================
+  
+  // POST /api/auth/signup - User signup/registration
+  app.post("/api/auth/signup", loginLimiter, async (req: Request, res: Response) => {
+    try {
+      const { name, email, password, subscribeToNewPosts, agreeToTerms } = req.body;
+      
+      // Validate required fields
+      if (!name || !email || !password) {
+        return res.status(400).json({ 
+          error: 'Missing required fields',
+          message: 'Name, email, and password are required'
+        });
+      }
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ 
+          error: 'Invalid email',
+          message: 'Please provide a valid email address'
+        });
+      }
+      
+      // Validate password strength
+      if (password.length < 6) {
+        return res.status(400).json({ 
+          error: 'Weak password',
+          message: 'Password must be at least 6 characters long'
+        });
+      }
+      
+      // Check if email already exists (checking both admin and user tables)
+      const existingAdmin = await prisma.admin.findFirst({
+        where: { email: email.toLowerCase() }
+      });
+      
+      const existingUser = await prisma.user.findFirst({
+        where: { email: email.toLowerCase() }
+      });
+      
+      if (existingAdmin || existingUser) {
+        return res.status(400).json({ 
+          error: 'Email already exists',
+          message: 'An account with this email already exists. Please login instead.'
+        });
+      }
+      
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
+      // Create new user
+      const newUser = await prisma.user.create({
+        data: {
+          email: email.toLowerCase(),
+          username: email.split('@')[0], // Use email prefix as username
+          password: hashedPassword,
+          name: name,
+          role: 'subscriber',
+          isSubscribed: subscribeToNewPosts || false,
+          isEmailVerified: false,
+          emailVerificationToken: crypto.randomBytes(32).toString('hex'),
+          emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+          createdAt: new Date(),
+          lastLogin: new Date()
+        }
+      });
+      
+      // Queue welcome email
+      try {
+        await queueWelcomeEmail({
+          email: newUser.email,
+          name: newUser.name || undefined,
+          username: newUser.username,
+          subscribeToNewPosts: newUser.isSubscribed || false
+        });
+        
+        // Queue verification email
+        if (newUser.emailVerificationToken) {
+          await queueVerificationEmail(
+            { email: newUser.email, name: newUser.name || undefined },
+            newUser.emailVerificationToken
+          );
+        }
+      } catch (emailError) {
+        console.error('Failed to queue welcome/verification emails:', emailError);
+        // Continue even if email fails
+      }
+      
+      // Create user object for session
+      const user: User = {
+        id: newUser.id.toString(),
+        email: newUser.email,
+        username: newUser.username,
+        password: newUser.password,
+        role: 'user',
+        avatar: null,
+        bio: null,
+        createdAt: newUser.createdAt,
+        updatedAt: newUser.updatedAt || new Date()
+      };
+      
+      // Log user in automatically
+      req.logIn(user, (err) => {
+        if (err) {
+          console.error('❌ Auto-login after signup failed:', err);
+          // Still return success, user can login manually
+          return res.json({ 
+            success: true, 
+            user: { ...user, password: undefined },
+            message: 'Account created successfully. Please login.'
+          });
+        }
+        
+        // Return success with user data
+        const { password: _, ...userWithoutPassword } = user;
+        res.json({ 
+          success: true, 
+          user: userWithoutPassword,
+          message: 'Account created successfully!'
+        });
+      });
+      
+    } catch (error: any) {
+      console.error('❌ Signup error:', error);
+      res.status(500).json({ 
+        error: 'Registration failed',
+        message: error.message || 'Failed to create account. Please try again.'
+      });
+    }
+  });
   
   // POST /api/auth/login - User login
   app.post("/api/auth/login", loginLimiter, (req: Request, res: Response, next: NextFunction) => {

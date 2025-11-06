@@ -1,5 +1,5 @@
 import nodemailer, { type Transporter, type SendMailOptions } from 'nodemailer';
-import { compile } from 'handlebars';
+import handlebars from 'handlebars';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import Bull from 'bull';
@@ -57,15 +57,15 @@ class EmailService {
     if (this.initialized) return;
 
     try {
-      // Configure SMTP transporter
+      // Configure SMTP transporter for ForexFactory
       const smtpConfig = {
-        host: process.env.SMTP_HOST || 'smtp.gmail.com',
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-        auth: process.env.SMTP_USER && process.env.SMTP_PASS ? {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS
-        } : undefined
+        host: process.env.SMTP_HOST || 'smtp.hostinger.com',
+        port: parseInt(process.env.SMTP_PORT || '465'),
+        secure: true, // SSL on port 465
+        auth: {
+          user: process.env.SMTP_USER || 'noreply@forexfactory.cc',
+          pass: process.env.SMTP_PASS || 'YoForex@101'
+        }
       };
 
       // Create transporter only if SMTP credentials are provided
@@ -157,9 +157,9 @@ class EmailService {
         if (templateContent.includes('<mjml>')) {
           const { html } = mjml2html(templateContent);
           this.mjmlTemplates.set(templateName, html);
-          this.templates.set(templateName, compile(html));
+          this.templates.set(templateName, handlebars.compile(html));
         } else {
-          this.templates.set(templateName, compile(templateContent));
+          this.templates.set(templateName, handlebars.compile(templateContent));
         }
         
         console.log(`Loaded email template: ${templateName}`);
@@ -208,7 +208,7 @@ class EmailService {
     }
 
     const mailOptions: SendMailOptions = {
-      from: options.from || process.env.EMAIL_FROM || 'noreply@forexeahub.com',
+      from: options.from || process.env.EMAIL_FROM || 'ForexFactory <noreply@forexfactory.cc>',
       to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
       subject: options.subject,
       html,
@@ -311,18 +311,33 @@ class EmailService {
   }
 
   /**
-   * Send welcome email
+   * Send welcome email specifically for ForexFactory
    */
-  async sendWelcomeEmail(user: User): Promise<void> {
+  async sendWelcomeEmail(user: User & { name?: string; subscribeToNewPosts?: boolean }): Promise<void> {
+    const userName = user.name || user.username || user.email.split('@')[0];
+    
     await this.sendEmail({
       to: user.email,
-      subject: 'Welcome to Forex EA Hub!',
+      subject: 'Welcome to ForexFactory - Your Free Forex Resources Await!',
       template: 'welcome',
       data: {
-        userName: user.username || user.email,
-        loginUrl: `${process.env.SITE_URL || 'https://forexeahub.com'}/login`,
-        downloadsUrl: `${process.env.SITE_URL || 'https://forexeahub.com'}/downloads`,
-        supportEmail: process.env.SUPPORT_EMAIL || 'support@forexeahub.com'
+        userName,
+        loginUrl: `${process.env.SITE_URL || 'https://forexfactory.cc'}/login`,
+        downloadsUrl: `${process.env.SITE_URL || 'https://forexfactory.cc'}/downloads`,
+        supportEmail: process.env.SUPPORT_EMAIL || 'support@forexfactory.cc',
+        subscribed: user.subscribeToNewPosts || false,
+        features: [
+          '✅ Unlimited downloads of all trading tools',
+          '✅ Access to exclusive MT4/MT5 Expert Advisors',
+          '✅ Custom indicators and templates',
+          '✅ Real-time trading signals',
+          '✅ Educational resources and tutorials'
+        ],
+        popularDownloads: [
+          { name: '🤖 AutoTrade Pro EA', description: 'Fully automated trading system' },
+          { name: '📊 TrendMaster Indicator', description: 'Advanced trend detection' },
+          { name: '📈 Scalping Template', description: 'Professional scalping setup' }
+        ]
       }
     });
   }

@@ -3,6 +3,7 @@ import { useLocation, Redirect } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import LoginModal from '@/components/LoginModal';
 
 interface User {
   id: string;
@@ -13,6 +14,13 @@ interface User {
   bio?: string;
 }
 
+interface IntendedAction {
+  type: 'download' | 'comment' | 'favorite' | 'custom';
+  payload?: any;
+  postId?: string | number;
+  callback?: () => void;
+}
+
 interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
@@ -21,6 +29,15 @@ interface AuthContextValue {
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  // Modal control
+  loginModalOpen: boolean;
+  loginModalMode: 'login' | 'signup';
+  openLoginModal: (mode?: 'login' | 'signup', intendedAction?: IntendedAction) => void;
+  closeLoginModal: () => void;
+  // Intended action tracking
+  intendedAction: IntendedAction | null;
+  setIntendedAction: (action: IntendedAction | null) => void;
+  executeIntendedAction: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -28,6 +45,13 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  
+  // Modal state
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [loginModalMode, setLoginModalMode] = useState<'login' | 'signup'>('login');
+  
+  // Intended action state
+  const [intendedAction, setIntendedAction] = useState<IntendedAction | null>(null);
 
   // Query to check authentication status
   const { data, isLoading, refetch } = useQuery({
@@ -58,8 +82,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: 'Login successful',
         description: `Welcome back, ${response.user.username}!`
       });
-      // Redirect to admin dashboard
-      setLocation('/admin');
+      
+      // Close the login modal
+      setLoginModalOpen(false);
+      
+      // Execute intended action if any
+      if (intendedAction) {
+        executeIntendedAction();
+      } else if (response.user.role === 'admin') {
+        // Redirect to admin dashboard only if no intended action
+        setLocation('/admin');
+      }
     },
     onError: (error: any) => {
       toast({
@@ -116,6 +149,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const checkAuth = async () => {
     await refetch();
   };
+  
+  // Modal control methods
+  const openLoginModal = (mode: 'login' | 'signup' = 'login', action?: IntendedAction) => {
+    setLoginModalMode(mode);
+    if (action) {
+      setIntendedAction(action);
+    }
+    setLoginModalOpen(true);
+  };
+  
+  const closeLoginModal = () => {
+    setLoginModalOpen(false);
+    // Don't clear intended action immediately in case of success
+  };
+  
+  // Execute intended action after successful login
+  const executeIntendedAction = () => {
+    if (!intendedAction) return;
+    
+    const { type, payload, callback } = intendedAction;
+    
+    switch (type) {
+      case 'download':
+        // The download section will handle the actual download
+        if (callback) {
+          callback();
+        }
+        break;
+      case 'comment':
+        // Handle comment action
+        if (callback) {
+          callback();
+        }
+        break;
+      case 'favorite':
+        // Handle favorite action
+        if (callback) {
+          callback();
+        }
+        break;
+      case 'custom':
+        // Execute custom callback
+        if (callback) {
+          callback();
+        }
+        break;
+    }
+    
+    // Clear the intended action after execution
+    setIntendedAction(null);
+  };
 
   const value: AuthContextValue = {
     user: data?.user || null,
@@ -124,10 +208,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin: data?.user?.role === 'admin',
     login,
     logout,
-    checkAuth
+    checkAuth,
+    // Modal control
+    loginModalOpen,
+    loginModalMode,
+    openLoginModal,
+    closeLoginModal,
+    // Intended action tracking
+    intendedAction,
+    setIntendedAction,
+    executeIntendedAction
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <LoginModal
+        open={loginModalOpen}
+        onClose={closeLoginModal}
+        mode={loginModalMode}
+        onModeChange={setLoginModalMode}
+        onSuccess={(user) => {
+          // Execute intended action after successful login
+          if (intendedAction) {
+            executeIntendedAction();
+          }
+        }}
+      />
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
