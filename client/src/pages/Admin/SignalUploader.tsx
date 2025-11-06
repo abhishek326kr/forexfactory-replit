@@ -70,34 +70,50 @@ export default function SignalUploader() {
     setUploading(true);
 
     try {
-      // Convert file to base64 for simple upload
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = reader.result as string;
-        
-        // Create signal with auto-generated fields
-        const response = await apiRequest("POST", "/api/admin/signals/simple", {
-          screenshot: base64,
-          description: description
-        });
+      // Step 1: Get presigned upload URL
+      const uploadResponse = await apiRequest("POST", "/api/upload", {});
+      const { uploadURL } = await uploadResponse.json();
 
-        toast({
-          title: "Success!",
-          description: "Signal uploaded successfully",
-        });
+      // Step 2: Upload file directly to object storage using presigned URL
+      const uploadResult = await fetch(uploadURL, {
+        method: "PUT",
+        body: selectedFile,
+        headers: {
+          "Content-Type": selectedFile.type
+        }
+      });
 
-        // Reset form
-        handleReset();
-        
-        // Refresh signals list
-        queryClient.invalidateQueries({ queryKey: ["/api/admin/signals"] });
-      };
+      if (!uploadResult.ok) {
+        throw new Error("Failed to upload file to storage");
+      }
+
+      // Step 3: Mark upload as complete and get the normalized path
+      const completeResponse = await apiRequest("POST", "/api/upload/complete", {
+        uploadURL: uploadURL
+      });
+      const { objectPath } = await completeResponse.json();
+
+      // Step 4: Create signal with the uploaded screenshot path
+      const signalResponse = await apiRequest("POST", "/api/admin/signals/simple", {
+        screenshot: objectPath,
+        description: description
+      });
+
+      toast({
+        title: "Success!",
+        description: "Signal uploaded successfully",
+      });
+
+      // Reset form
+      handleReset();
       
-      reader.readAsDataURL(selectedFile);
-    } catch (error) {
+      // Refresh signals list
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/signals"] });
+    } catch (error: any) {
+      console.error("Upload error:", error);
       toast({
         title: "Upload failed",
-        description: "Failed to upload signal. Please try again.",
+        description: error.message || "Failed to upload signal. Please try again.",
         variant: "destructive"
       });
     } finally {

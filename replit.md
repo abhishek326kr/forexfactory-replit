@@ -30,6 +30,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Signal Management System
 - **Signal Uploader**: Complete signal upload feature with screenshot upload and rich text editor
+- **Upload Mechanism Fixed**: Changed from base64 JSON upload to proper object storage with presigned URLs
 - **Signal Routes**: Added `/signals`, `/signals/:id`, `/admin/signals`, `/admin/signals/new`, `/admin/signals/edit/:id`
 - **Admin Integration**: Full signal management in admin panel with list, upload, and edit capabilities
 - **SEO Template**: Added SIGNAL template to META_DESCRIPTION_TEMPLATES for proper SEO
