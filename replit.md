@@ -25,6 +25,8 @@ Preferred communication style: Simple, everyday language.
 - **Error Handling**: Added comprehensive error handling with catch blocks for startup failures
 - **Process Monitoring**: Implemented global handlers for unhandled rejections and uncaught exceptions
 - **Port Binding**: Configured proper port binding (5000) with host (0.0.0.0) for production environment
+- **Payload Limits**: Increased body parser limits to 50MB for large file uploads (signals, screenshots, EAs)
+- **Production Build Verified**: Tested production build locally - server starts correctly and serves all routes
 
 ### Signal Management System
 - **Signal Uploader**: Complete signal upload feature with screenshot upload and rich text editor
