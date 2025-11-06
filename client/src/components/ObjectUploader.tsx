@@ -9,8 +9,9 @@ interface ObjectUploaderProps {
   maxNumberOfFiles?: number;
   maxFileSize?: number;
   onGetUploadParameters: () => Promise<{
-    method: "PUT";
+    method: "PUT" | "POST";
     url: string;
+    isLocalUpload?: boolean;
   }>;
   onComplete?: (result: { 
     successful: Array<{ 
@@ -86,29 +87,36 @@ export function ObjectUploader({
       // Step 1: Get upload parameters from the server
       const params = await onGetUploadParameters();
       
-      // Step 2: Upload file directly to object storage using presigned URL
-      const xhr = new XMLHttpRequest();
+      // Check if this is a local upload (development mode)
+      const isLocalUpload = params.isLocalUpload || params.url === '/api/admin/upload/local';
       
-      // Track upload progress
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          const percentComplete = (event.loaded / event.total) * 100;
-          setUploadProgress(Math.round(percentComplete));
-        }
-      });
-
-      // Handle completion
-      xhr.onload = async function() {
-        if (xhr.status === 200 || xhr.status === 204) {
-          try {
-            if (handleCompletionExternally) {
-              // Parent component handles completion - just pass the upload URL
+      if (isLocalUpload) {
+        // Development mode: Upload directly to local server
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        
+        const xhr = new XMLHttpRequest();
+        
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = (event.loaded / event.total) * 100;
+            setUploadProgress(Math.round(percentComplete));
+          }
+        });
+        
+        // Handle completion
+        xhr.onload = async function() {
+          if (xhr.status === 200) {
+            try {
+              const data = JSON.parse(xhr.responseText);
               setUploadSuccess(true);
               
+              // Return the result in the expected format
               const result = {
                 successful: [{
-                  uploadURL: params.url,
-                  response: { body: { url: params.url } }
+                  uploadURL: data.publicUrl,
+                  response: { body: { url: data.publicUrl } }
                 }]
               };
               onComplete?.(result);
@@ -118,28 +126,49 @@ export function ObjectUploader({
                 setShowModal(false);
                 resetState();
               }, 1000);
-            } else {
-              // Step 3: Notify server that upload is complete and get public URL
-              const response = await fetch(completeEndpoint, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                credentials: 'include', // Include credentials for admin endpoints
-                body: JSON.stringify({
-                  uploadURL: params.url
-                })
-              });
+            } catch (err) {
+              setError('Failed to process upload response.');
+            }
+          } else {
+            setError('Upload failed. Please try again.');
+          }
+          setUploading(false);
+        };
+        
+        xhr.onerror = function() {
+          setError('Upload failed. Please check your connection and try again.');
+          setUploading(false);
+        };
+        
+        // Send the file to local server
+        xhr.open('POST', params.url);
+        xhr.withCredentials = true; // Include cookies for authentication
+        xhr.send(formData);
+        
+      } else {
+        // Production mode: Upload to object storage using presigned URL
+        const xhr = new XMLHttpRequest();
+        
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = (event.loaded / event.total) * 100;
+            setUploadProgress(Math.round(percentComplete));
+          }
+        });
 
-              if (response.ok) {
-                const data = await response.json();
+        // Handle completion
+        xhr.onload = async function() {
+          if (xhr.status === 200 || xhr.status === 204) {
+            try {
+              if (handleCompletionExternally) {
+                // Parent component handles completion - just pass the upload URL
                 setUploadSuccess(true);
                 
-                // Return the result in the expected format
                 const result = {
                   successful: [{
                     uploadURL: params.url,
-                    response: { body: { url: data.publicUrl || data.objectPath } }
+                    response: { body: { url: params.url } }
                   }]
                 };
                 onComplete?.(result);
@@ -150,27 +179,59 @@ export function ObjectUploader({
                   resetState();
                 }, 1000);
               } else {
-                setError('Failed to finalize upload. Please try again.');
+                // Step 3: Notify server that upload is complete and get public URL
+                const response = await fetch(completeEndpoint, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  credentials: 'include', // Include credentials for admin endpoints
+                  body: JSON.stringify({
+                    uploadURL: params.url
+                  })
+                });
+
+                if (response.ok) {
+                  const data = await response.json();
+                  setUploadSuccess(true);
+                  
+                  // Return the result in the expected format
+                  const result = {
+                    successful: [{
+                      uploadURL: params.url,
+                      response: { body: { url: data.publicUrl || data.objectPath } }
+                    }]
+                  };
+                  onComplete?.(result);
+                  
+                  // Close modal after short delay
+                  setTimeout(() => {
+                    setShowModal(false);
+                    resetState();
+                  }, 1000);
+                } else {
+                  setError('Failed to finalize upload. Please try again.');
+                }
               }
+            } catch (err) {
+              setError('Failed to complete upload process.');
             }
-          } catch (err) {
-            setError('Failed to complete upload process.');
+          } else {
+            setError('Upload failed. Please try again.');
           }
-        } else {
-          setError('Upload failed. Please try again.');
-        }
-        setUploading(false);
-      };
+          setUploading(false);
+        };
 
-      xhr.onerror = function() {
-        setError('Upload failed. Please check your connection and try again.');
-        setUploading(false);
-      };
+        xhr.onerror = function() {
+          setError('Upload failed. Please check your connection and try again.');
+          setUploading(false);
+        };
 
-      // Send the file to object storage
-      xhr.open(params.method, params.url);
-      xhr.setRequestHeader('Content-Type', selectedFile.type);
-      xhr.send(selectedFile);
+        // Send the file to object storage
+        xhr.open(params.method, params.url);
+        xhr.setRequestHeader('Content-Type', selectedFile.type);
+        xhr.send(selectedFile);
+      }
       
     } catch (err) {
       console.error('Upload error:', err);

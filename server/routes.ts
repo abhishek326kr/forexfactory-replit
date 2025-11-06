@@ -334,6 +334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await ensureDirectoryExists('./server/uploads/signals');
   await ensureDirectoryExists('./server/uploads/previews');
   await ensureDirectoryExists('./server/uploads/media');
+  await ensureDirectoryExists('./server/uploads/images'); // For development image uploads
 
   // Configure multer storage for different file types
   const signalStorage = multer.diskStorage({
@@ -427,6 +428,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!isImage && !isDocument) {
         return cb(new Error('Invalid file type'));
+      }
+      
+      // Scan for malicious patterns
+      const scanResult = scanForMaliciousPatterns(file.originalname);
+      if (!scanResult.safe) {
+        return cb(new Error(scanResult.reason || 'File failed security scan'));
+      }
+      
+      cb(null, true);
+    }
+  });
+
+  // Configure multer for local image uploads (development mode)
+  const localImageStorage = multer.diskStorage({
+    destination: async (req, file, cb) => {
+      const uploadPath = './server/uploads/images';
+      await ensureDirectoryExists(uploadPath);
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      const uniqueFilename = generateUniqueFilename(file.originalname);
+      cb(null, uniqueFilename);
+    }
+  });
+
+  const localImageUpload = multer({
+    storage: localImageStorage,
+    limits: {
+      fileSize: FILE_TYPES.IMAGE.maxSize
+    },
+    fileFilter: (req, file, cb) => {
+      // Validate file type
+      if (!validateFileType(file.originalname, 'IMAGE')) {
+        return cb(new Error('Invalid file type. Only image files are allowed'));
       }
       
       // Scan for malicious patterns
@@ -3607,15 +3642,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/admin/upload - Get presigned URL for direct upload to object storage
+  // POST /api/admin/upload - Get presigned URL for upload (production) or local upload info (development)
   app.post("/api/admin/upload", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      res.json({ uploadURL });
+      // Check if we're in development mode
+      if (process.env.NODE_ENV === 'development') {
+        // In development, return a local upload URL
+        res.json({ 
+          uploadURL: '/api/admin/upload/local',
+          isLocalUpload: true 
+        });
+      } else {
+        // In production, use object storage
+        const objectStorageService = new ObjectStorageService();
+        const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+        res.json({ uploadURL, isLocalUpload: false });
+      }
     } catch (error: any) {
       console.error("Error getting upload URL:", error);
       res.status(500).json({ error: "Failed to get upload URL", message: error.message });
+    }
+  });
+
+  // POST /api/admin/upload/local - Handle local file uploads in development mode
+  app.post("/api/admin/upload/local", requireAdmin, localImageUpload.single('file'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Generate the public URL path for the uploaded file
+      const publicUrl = `/uploads/images/${req.file.filename}`;
+      
+      res.json({
+        success: true,
+        publicUrl,
+        filename: req.file.filename,
+        size: req.file.size,
+        mimetype: req.file.mimetype
+      });
+    } catch (error: any) {
+      console.error("Error uploading file locally:", error);
+      res.status(500).json({ error: "Failed to upload file", message: error.message });
     }
   });
 
@@ -3626,25 +3694,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "uploadURL is required" });
       }
 
-      const userId = req.user?.id || 'admin';
-      const objectStorageService = new ObjectStorageService();
-      
-      // Set ACL policy to make the image public (for blog post featured images)
-      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
-        req.body.uploadURL,
-        {
-          owner: userId,
-          visibility: "public", // Public for blog post images
-          aclRules: []
-        }
-      );
+      // Check if we're in development mode
+      if (process.env.NODE_ENV === 'development') {
+        // In development mode, the upload is already complete
+        // Just return the local file path
+        const publicUrl = req.body.uploadURL; // This would be the local path
+        res.status(200).json({
+          success: true,
+          objectPath: publicUrl,
+          publicUrl: publicUrl
+        });
+      } else {
+        // In production, use object storage ACL
+        const userId = req.user?.id || 'admin';
+        const objectStorageService = new ObjectStorageService();
+        
+        // Set ACL policy to make the image public (for blog post featured images)
+        const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
+          req.body.uploadURL,
+          {
+            owner: userId,
+            visibility: "public", // Public for blog post images
+            aclRules: []
+          }
+        );
 
-      res.status(200).json({
-        success: true,
-        objectPath: objectPath,
-        // Construct the public URL for the image
-        publicUrl: objectPath
-      });
+        res.status(200).json({
+          success: true,
+          objectPath: objectPath,
+          // Construct the public URL for the image
+          publicUrl: objectPath
+        });
+      }
     } catch (error: any) {
       console.error("Error setting ACL policy:", error);
       res.status(500).json({ error: "Failed to complete upload", message: error.message });
