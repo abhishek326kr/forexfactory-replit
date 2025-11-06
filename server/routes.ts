@@ -2446,7 +2446,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metaRobots,
         ogTitle,
         ogDescription,
-        ogImage
+        ogImage,
+        // Download configuration fields
+        hasDownload,
+        downloadTitle,
+        downloadDescription,
+        downloadType,
+        downloadVersion,
+        downloadFileUrl,
+        downloadFileName,
+        downloadFileSize,
+        requiresLogin
       } = req.body;
 
       // Generate slug if not provided
@@ -2474,7 +2484,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         categoryId: categoryId ? parseInt(categoryId.toString()) : 1,
         tags: String(tags || ''),
         downloadLink: downloadLink ? String(downloadLink) : null,
-        views: 0
+        views: 0,
+        // Download configuration fields
+        hasDownload: hasDownload || false,
+        downloadTitle: downloadTitle || null,
+        downloadDescription: downloadDescription || null,
+        downloadType: downloadType || null,
+        downloadVersion: downloadVersion || null,
+        downloadFileUrl: downloadFileUrl || null,
+        downloadFileName: downloadFileName || null,
+        downloadFileSize: downloadFileSize || null,
+        requiresLogin: requiresLogin !== false, // Default to true
+        downloadCount: 0
       };
 
       // Create blog using storage layer
@@ -2531,7 +2552,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metaRobots,
         ogTitle,
         ogDescription,
-        ogImage
+        ogImage,
+        // Download configuration fields
+        hasDownload,
+        downloadTitle,
+        downloadDescription,
+        downloadType,
+        downloadVersion,
+        downloadFileUrl,
+        downloadFileName,
+        downloadFileSize,
+        requiresLogin
       } = req.body;
 
       // Update blog post using storage layer
@@ -2545,6 +2576,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (downloadLink !== undefined) updateData.downloadLink = downloadLink;
       if (status !== undefined) updateData.status = status as BlogStatus;
       if (seoSlug !== undefined) updateData.seoSlug = seoSlug;
+      // Download configuration fields
+      if (hasDownload !== undefined) updateData.hasDownload = hasDownload;
+      if (downloadTitle !== undefined) updateData.downloadTitle = downloadTitle;
+      if (downloadDescription !== undefined) updateData.downloadDescription = downloadDescription;
+      if (downloadType !== undefined) updateData.downloadType = downloadType;
+      if (downloadVersion !== undefined) updateData.downloadVersion = downloadVersion;
+      if (downloadFileUrl !== undefined) updateData.downloadFileUrl = downloadFileUrl;
+      if (downloadFileName !== undefined) updateData.downloadFileName = downloadFileName;
+      if (downloadFileSize !== undefined) updateData.downloadFileSize = downloadFileSize;
+      if (requiresLogin !== undefined) updateData.requiresLogin = requiresLogin;
 
       const blog = await storage.updateBlog(Number(id), updateData);
 
@@ -3044,6 +3085,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error tracking blog view:", error);
       res.status(500).json({ error: "Failed to track view", message: error.message });
+    }
+  });
+
+  // POST /api/blogs/:id/download - Track blog download
+  app.post("/api/blogs/:id/download", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid blog ID" });
+      }
+      
+      // Get the blog to ensure it exists and has a download
+      const blog = await storage.getBlogById(id);
+      if (!blog) {
+        return res.status(404).json({ error: "Blog not found" });
+      }
+      
+      if (!blog.hasDownload && !blog.downloadLink) {
+        return res.status(400).json({ error: "This blog has no download available" });
+      }
+      
+      // Increment download count
+      const updateData: any = {
+        downloadCount: (blog.downloadCount || 0) + 1
+      };
+      
+      await storage.updateBlog(id, updateData);
+      
+      res.json({ 
+        success: true, 
+        message: "Download tracked",
+        downloadUrl: blog.downloadFileUrl || blog.downloadLink
+      });
+    } catch (error: any) {
+      console.error("Error tracking blog download:", error);
+      res.status(500).json({ error: "Failed to track download", message: error.message });
     }
   });
 

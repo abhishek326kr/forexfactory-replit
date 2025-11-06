@@ -93,7 +93,18 @@ export const blogs = mysqlTable('blogs', {
   featuredImage: varchar('featured_image', { length: 255 }).notNull(),
   tags: varchar('tags', { length: 255 }).notNull(),
   categoryId: int('category_id').notNull(),
-  downloadLink: varchar('download_link', { length: 255 })
+  downloadLink: varchar('download_link', { length: 255 }),
+  // Download-related fields
+  hasDownload: boolean('has_download').default(false),
+  downloadTitle: text('download_title'),
+  downloadDescription: text('download_description'),
+  downloadFileName: text('download_file_name'),
+  downloadFileUrl: text('download_file_url'),
+  downloadFileSize: text('download_file_size'),
+  downloadVersion: text('download_version'),
+  downloadType: text('download_type'), // EA, Indicator, Template, Tool, or Other
+  downloadCount: int('download_count').default(0),
+  requiresLogin: boolean('requires_login').default(true)
 });
 
 // Categories table

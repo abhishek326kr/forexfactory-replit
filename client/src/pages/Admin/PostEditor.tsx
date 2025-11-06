@@ -17,6 +17,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Editor } from '@/components/Editor';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form,
   FormControl,
@@ -37,7 +38,9 @@ import {
   Settings2,
   FileText,
   User,
-  Upload
+  Upload,
+  Download,
+  FileDown
 } from 'lucide-react';
 import { ObjectUploader } from '@/components/ObjectUploader';
 import type { UploadResult } from '@uppy/core';
@@ -51,6 +54,17 @@ const postSchema = z.object({
   tags: z.string().optional(),
   downloadLink: z.string().url().optional().or(z.literal('')),
   status: z.enum(['draft', 'published']),
+  
+  // Download Configuration Fields
+  hasDownload: z.boolean().optional(),
+  downloadTitle: z.string().optional(),
+  downloadDescription: z.string().optional(),
+  downloadType: z.enum(['EA', 'Indicator', 'Template', 'Tool', 'Other']).optional(),
+  downloadVersion: z.string().optional(),
+  downloadFileUrl: z.string().optional(),
+  downloadFileName: z.string().optional(),
+  downloadFileSize: z.string().optional(),
+  requiresLogin: z.boolean().optional(),
   
   // SEO Fields
   seoSlug: z.string().min(1, 'Slug is required').regex(/^[a-z0-9-]+$/, 'Slug must be lowercase with hyphens'),
@@ -71,6 +85,7 @@ export default function PostEditor() {
   const { id } = useParams();
   const isEditMode = !!id;
   const [seoExpanded, setSeoExpanded] = useState(false);
+  const [downloadExpanded, setDownloadExpanded] = useState(false);
   const [selectedFormats, setSelectedFormats] = useState<string[]>([]);
 
   const form = useForm<PostFormData>({
@@ -84,6 +99,17 @@ export default function PostEditor() {
       tags: '',
       downloadLink: '',
       status: 'draft',
+      // Download fields
+      hasDownload: false,
+      downloadTitle: '',
+      downloadDescription: '',
+      downloadType: 'EA',
+      downloadVersion: '',
+      downloadFileUrl: '',
+      downloadFileName: '',
+      downloadFileSize: '',
+      requiresLogin: true,
+      // SEO fields
       seoSlug: '',
       seoTitle: '',
       seoDescription: '',
@@ -161,6 +187,17 @@ export default function PostEditor() {
         tags: post.tags || '',
         downloadLink: post.downloadLink || '',
         status: post.status,
+        // Download fields
+        hasDownload: post.hasDownload || false,
+        downloadTitle: post.downloadTitle || '',
+        downloadDescription: post.downloadDescription || '',
+        downloadType: post.downloadType || 'EA',
+        downloadVersion: post.downloadVersion || '',
+        downloadFileUrl: post.downloadFileUrl || '',
+        downloadFileName: post.downloadFileName || '',
+        downloadFileSize: post.downloadFileSize || '',
+        requiresLogin: post.requiresLogin !== false, // Default to true
+        // SEO fields
         seoSlug: post.slug || post.seoSlug || '',
         seoTitle: seoMeta.seoTitle || '',
         seoDescription: seoMeta.seoDescription || '',
@@ -431,6 +468,233 @@ export default function PostEditor() {
                           </FormItem>
                         )}
                       />
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+
+              {/* Download Configuration Section (Expandable) */}
+              <Collapsible open={downloadExpanded} onOpenChange={setDownloadExpanded}>
+                <Card>
+                  <CardHeader>
+                    <CollapsibleTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        className="w-full justify-between p-0 hover:bg-transparent"
+                        type="button"
+                      >
+                        <div>
+                          <CardTitle className="flex items-center gap-2">
+                            <Download className="h-4 w-4" />
+                            📥 Download Configuration
+                          </CardTitle>
+                          <CardDescription>Add downloadable files to your post</CardDescription>
+                        </div>
+                        <ChevronDown className={`h-4 w-4 transition-transform ${downloadExpanded ? 'rotate-180' : ''}`} />
+                      </Button>
+                    </CollapsibleTrigger>
+                  </CardHeader>
+                  <CollapsibleContent>
+                    <CardContent className="space-y-4">
+                      {/* Main checkbox to enable download */}
+                      <FormField
+                        control={form.control}
+                        name="hasDownload"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                data-testid="checkbox-has-download"
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>
+                                This post includes a downloadable file
+                              </FormLabel>
+                              <FormDescription>
+                                Enable this to add download configuration to your post
+                              </FormDescription>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Show download fields only when hasDownload is checked */}
+                      {form.watch('hasDownload') && (
+                        <>
+                          {/* Download Title */}
+                          <FormField
+                            control={form.control}
+                            name="downloadTitle"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Download Title *</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    {...field}
+                                    placeholder="e.g., Advanced Scalping EA v2.0"
+                                    data-testid="input-download-title"
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Download Description */}
+                          <FormField
+                            control={form.control}
+                            name="downloadDescription"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Download Description</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    {...field}
+                                    placeholder="Brief description of the download"
+                                    rows={3}
+                                    data-testid="textarea-download-description"
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Download Type */}
+                          <FormField
+                            control={form.control}
+                            name="downloadType"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Download Type</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger data-testid="select-download-type">
+                                      <SelectValue placeholder="Select download type" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="EA">Expert Advisor (EA)</SelectItem>
+                                    <SelectItem value="Indicator">Indicator</SelectItem>
+                                    <SelectItem value="Template">Template</SelectItem>
+                                    <SelectItem value="Tool">Trading Tool</SelectItem>
+                                    <SelectItem value="Other">Other</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Version */}
+                          <FormField
+                            control={form.control}
+                            name="downloadVersion"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Version</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    {...field}
+                                    placeholder="e.g., v2.0.1"
+                                    data-testid="input-download-version"
+                                  />
+                                </FormControl>
+                                <FormDescription>Version number of the file</FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* File Upload */}
+                          <div>
+                            <Label>Upload File</Label>
+                            <div className="mt-2 space-y-2">
+                              {form.watch('downloadFileUrl') && (
+                                <div className="flex items-center gap-2 p-2 bg-muted rounded">
+                                  <FileDown className="h-4 w-4" />
+                                  <span className="text-sm">{form.watch('downloadFileName') || 'File uploaded'}</span>
+                                  {form.watch('downloadFileSize') && (
+                                    <Badge variant="secondary">{form.watch('downloadFileSize')}</Badge>
+                                  )}
+                                </div>
+                              )}
+                              <ObjectUploader
+                                maxFileSize={52428800} // 50MB
+                                onGetUploadParameters={async () => {
+                                  const response = await fetch('/api/admin/upload/presigned', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    credentials: 'include'
+                                  });
+                                  if (!response.ok) throw new Error('Failed to get upload URL');
+                                  const data = await response.json();
+                                  return {
+                                    method: 'PUT' as const,
+                                    url: data.uploadUrl,
+                                    isLocalUpload: data.isLocalUpload
+                                  };
+                                }}
+                                onComplete={(result) => {
+                                  const file = result.successful[0];
+                                  if (file) {
+                                    const fileUrl = file.response?.body?.url || '';
+                                    form.setValue('downloadFileUrl', fileUrl);
+                                    
+                                    // Extract filename from URL or use a default
+                                    const urlParts = fileUrl.split('/');
+                                    const fileName = urlParts[urlParts.length - 1] || 'download-file';
+                                    form.setValue('downloadFileName', fileName);
+                                    
+                                    // For now, we'll set a placeholder file size
+                                    // In production, this should come from the server
+                                    form.setValue('downloadFileSize', 'Calculating...');
+                                    
+                                    toast({
+                                      title: 'File uploaded successfully',
+                                      description: `File "${fileName}" has been uploaded.`
+                                    });
+                                  }
+                                }}
+                              >
+                                <Upload className="mr-2 h-4 w-4" />
+                                Upload File
+                              </ObjectUploader>
+                              <p className="text-xs text-muted-foreground">
+                                Accept: .ex4, .ex5, .mq4, .mq5, .zip, .rar, .tpl (Max: 50MB)
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Require Login to Download */}
+                          <FormField
+                            control={form.control}
+                            name="requiresLogin"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    data-testid="checkbox-requires-login"
+                                  />
+                                </FormControl>
+                                <div className="space-y-1 leading-none">
+                                  <FormLabel>
+                                    Require Login to Download
+                                  </FormLabel>
+                                  <FormDescription>
+                                    Users must be logged in to download this file
+                                  </FormDescription>
+                                </div>
+                              </FormItem>
+                            )}
+                          />
+                        </>
+                      )}
                     </CardContent>
                   </CollapsibleContent>
                 </Card>

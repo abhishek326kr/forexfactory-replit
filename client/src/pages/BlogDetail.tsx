@@ -6,6 +6,7 @@ import Layout from '@/components/Layout';
 import SEOHead from '@/components/SEOHead';
 import BlogCard from '@/components/BlogCard';
 import TimedDownloadButton from '@/components/TimedDownloadButton';
+import DownloadSection from '@/components/DownloadSection';
 import SignalsSidebar from '@/components/SignalsSidebar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -232,8 +233,23 @@ export default function BlogDetail() {
                   data-testid="blog-content"
                 />
                 
-                {/* Download Button */}
-                {blog.downloadLink && (
+                {/* Download Section */}
+                <DownloadSection
+                  hasDownload={blog.hasDownload}
+                  downloadTitle={blog.downloadTitle}
+                  downloadDescription={blog.downloadDescription}
+                  downloadType={blog.downloadType}
+                  downloadVersion={blog.downloadVersion}
+                  downloadFileUrl={blog.downloadFileUrl || blog.downloadLink}
+                  downloadFileName={blog.downloadFileName}
+                  downloadFileSize={blog.downloadFileSize}
+                  downloadCount={blog.downloadCount}
+                  requiresLogin={blog.requiresLogin}
+                  blogId={blog.id}
+                />
+                
+                {/* Old Download Button (Legacy Support) */}
+                {!blog.hasDownload && blog.downloadLink && (
                   <div className="my-12">
                     <Separator className="mb-8" />
                     <TimedDownloadButton 
@@ -244,7 +260,7 @@ export default function BlogDetail() {
                   </div>
                 )}
                 
-                {!blog.downloadLink && <Separator className="my-8" />}
+                {!blog.hasDownload && !blog.downloadLink && <Separator className="my-8" />}
                 
                 {/* Social Share */}
                 <div className="flex items-center justify-between mb-8">
