@@ -652,12 +652,7 @@ export class PrismaStorage implements IStorage {
   async createSignal(insertSignal: InsertSignal): Promise<Signal> {
     try {
       const signal = await prisma.signal.create({
-        data: {
-          ...insertSignal,
-          downloadCount: 0,
-          rating: '0.00',
-          status: 'active'
-        }
+        data: insertSignal
       });
       return signal as Signal;
     } catch (error) {

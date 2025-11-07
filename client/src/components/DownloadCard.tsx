@@ -40,6 +40,11 @@ export default function DownloadCard({
     return num.toString();
   };
 
+  const formatRating = (rating: number | null | undefined) => {
+    const numRating = typeof rating === 'string' ? parseFloat(rating) : rating;
+    return (numRating ?? 0).toFixed(1);
+  };
+
   // Helper function to safely parse array fields that might be JSON strings
   const parseArrayField = <T,>(field: T[] | string | null | undefined): T[] => {
     if (!field) return [];
@@ -106,7 +111,7 @@ export default function DownloadCard({
           </div>
           <div className="flex items-center space-x-1.5">
             <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-            <span className="text-sm font-medium">{(rating ?? 0).toFixed(1)}</span>
+            <span className="text-sm font-medium">{formatRating(rating)}</span>
           </div>
           <div className="flex items-center space-x-1.5">
             <Calendar className="w-4 h-4 text-muted-foreground" />

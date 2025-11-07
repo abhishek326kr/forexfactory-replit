@@ -13,7 +13,7 @@ interface BlogCardProps {
   readTime: number;
   image: string;
   slug: string;
-  tags?: string[];
+  tags?: string[] | string;
 }
 
 export default function BlogCard({
@@ -28,37 +28,39 @@ export default function BlogCard({
   slug,
   tags = [],
 }: BlogCardProps) {
+  // Parse tags if it's a string (from database) or use as array
+  const tagsArray = typeof tags === 'string' 
+    ? tags.split(',').map(t => t.trim()).filter(t => t.length > 0)
+    : Array.isArray(tags) 
+    ? tags 
+    : [];
   return (
     <Card className="h-full flex flex-col hover-elevate active-elevate-2 transition-all duration-200" data-testid={`card-blog-${id}`}>
       <Link href={`/blog/${slug}`}>
-        <a className="block">
-          <div className="aspect-video relative overflow-hidden rounded-t-lg">
-            <img
-              src={image}
-              alt={title}
-              className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-            />
-            <Badge className="absolute top-4 left-4" variant="secondary">
-              {category}
-            </Badge>
-          </div>
-        </a>
+        <div className="aspect-video relative overflow-hidden rounded-t-lg cursor-pointer">
+          <img
+            src={image}
+            alt={title}
+            className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+          />
+          <Badge className="absolute top-4 left-4" variant="secondary">
+            {category}
+          </Badge>
+        </div>
       </Link>
       
       <CardHeader>
         <Link href={`/blog/${slug}`}>
-          <a className="hover:text-primary transition-colors">
-            <h3 className="font-semibold text-lg line-clamp-2">{title}</h3>
-          </a>
+          <h3 className="font-semibold text-lg line-clamp-2 hover:text-primary transition-colors cursor-pointer">{title}</h3>
         </Link>
       </CardHeader>
       
       <CardContent className="flex-grow">
         <p className="text-sm text-muted-foreground line-clamp-3">{excerpt}</p>
         
-        {tags.length > 0 && (
+        {tagsArray.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-4">
-            {tags.slice(0, 3).map((tag) => (
+            {tagsArray.slice(0, 3).map((tag: string) => (
               <Badge key={tag} variant="outline" className="text-xs">
                 {tag}
               </Badge>
@@ -79,10 +81,10 @@ export default function BlogCard({
           </span>
         </div>
         <Link href={`/blog/${slug}`}>
-          <a className="text-primary flex items-center text-sm font-medium hover:underline" data-testid={`link-read-more-${id}`}>
+          <span className="text-primary flex items-center text-sm font-medium hover:underline cursor-pointer" data-testid={`link-read-more-${id}`}>
             Read more
             <ArrowRight className="w-3 h-3 ml-1" />
-          </a>
+          </span>
         </Link>
       </CardFooter>
     </Card>

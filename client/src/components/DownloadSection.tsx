@@ -29,7 +29,6 @@ interface DownloadSectionProps {
   downloadFileName?: string;
   downloadFileSize?: string;
   downloadCount?: number;
-  requiresLogin?: boolean;
   blogId: string | number;
 }
 
@@ -43,7 +42,6 @@ export default function DownloadSection({
   downloadFileName,
   downloadFileSize,
   downloadCount = 0,
-  requiresLogin = true,
   blogId
 }: DownloadSectionProps) {
   const { isAuthenticated, openLoginModal } = useAuth();
@@ -51,10 +49,13 @@ export default function DownloadSection({
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadComplete, setDownloadComplete] = useState(false);
 
-  // Don't render if there's no download
-  if (!hasDownload || !downloadFileUrl) {
+  // Don't render if there's no download link
+  if (!downloadFileUrl) {
     return null;
   }
+
+  // Always require login for downloads
+  const loginRequired = true;
 
   // Get the appropriate icon based on download type
   const getIcon = () => {
@@ -166,8 +167,8 @@ export default function DownloadSection({
   };
 
   const handleDownload = async () => {
-    // Check if login is required
-    if (requiresLogin && !isAuthenticated) {
+    // Always check if login is required
+    if (loginRequired && !isAuthenticated) {
       // Open login modal with download intent
       openLoginModal('login', {
         type: 'download',
@@ -252,13 +253,13 @@ export default function DownloadSection({
                 onClick={handleDownload}
                 disabled={isDownloading}
                 className={`w-full md:w-auto shadow-lg disabled:opacity-50 ${
-                  requiresLogin && !isAuthenticated
+                  loginRequired && !isAuthenticated
                     ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white'
                     : 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white'
                 }`}
-                data-testid={requiresLogin && !isAuthenticated ? "button-login-to-download" : "button-download"}
+                data-testid={loginRequired && !isAuthenticated ? "button-login-to-download" : "button-download"}
               >
-                {requiresLogin && !isAuthenticated ? (
+                {loginRequired && !isAuthenticated ? (
                   <>
                     <Lock className="mr-2 h-5 w-5" />
                     Login to Download
@@ -284,7 +285,7 @@ export default function DownloadSection({
           </div>
 
           {/* Additional Info for Non-logged-in Users */}
-          {requiresLogin && !isAuthenticated && (
+          {loginRequired && !isAuthenticated && (
             <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
               <p className="text-sm text-blue-700 dark:text-blue-300">
                 🔐 <strong>Free account required:</strong> Sign up for free to download this file and get access to all our trading tools.

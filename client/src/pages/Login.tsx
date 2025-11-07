@@ -93,7 +93,7 @@ export default function Login() {
             <div className="space-y-1">
               <CardTitle className="text-xl font-semibold text-center">Admin Login</CardTitle>
               <CardDescription className="text-center">
-                Enter your credentials to access the admin panel
+                Enter your admin credentials to access the admin panel
               </CardDescription>
             </div>
           </CardHeader>
@@ -197,6 +197,10 @@ export default function Login() {
             <div className="text-sm text-center text-muted-foreground">
               <Link href="/" className="hover:text-primary underline" data-testid="link-home">
                 Back to home
+              </Link>
+              {' • '}
+              <Link href="/user/login" className="hover:text-primary underline">
+                User Login
               </Link>
             </div>
             <div className="text-xs text-center text-muted-foreground">

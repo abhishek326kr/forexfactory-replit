@@ -270,7 +270,7 @@ export default function Header() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
-                  <Link href="/login">
+                  <Link href="/user/login">
                     <Button variant="default" size="sm" data-testid="button-login">
                       Login
                     </Button>

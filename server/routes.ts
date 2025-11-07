@@ -99,7 +99,12 @@ const MemoryStoreSession = MemoryStore(session);
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // limit each IP to 5 requests per windowMs
-  message: 'Too many login attempts, please try again later'
+  handler: (req, res) => {
+    res.status(429).json({
+      error: 'Too many attempts',
+      message: 'Too many login attempts, please try again later'
+    });
+  }
 });
 
 // Additional rate limiters
@@ -183,33 +188,67 @@ passport.use(new LocalStrategy(
         }
       });
       
-      if (!admin) {
-        console.log('❌ No admin found with email/username:', email);
+      if (admin) {
+        console.log('👤 Admin found:', admin.email);
+        
+        // Verify password
+        const isValidPassword = await bcrypt.compare(password, admin.password);
+        if (!isValidPassword) {
+          console.log('❌ Invalid password for admin:', admin.email);
+          return done(null, false, { message: 'Invalid email or password' });
+        }
+        
+        console.log('✅ Password valid for admin:', admin.email);
+        
+        // Return admin data as user
+        const user: User = {
+          id: admin.id.toString(),
+          email: admin.email,
+          username: admin.username,
+          password: admin.password,
+          role: admin.role === 'admin' ? 'admin' : 'user',
+          avatar: admin.profilePic,
+          bio: null,
+          createdAt: admin.createdAt,
+          updatedAt: admin.updatedAt || new Date()
+        };
+        
+        return done(null, user);
+      }
+      
+      // If no admin found, try to find regular user
+      console.log('🔍 Searching for regular user with email:', email);
+      const regularUser = await prisma.user.findFirst({
+        where: { email: email }
+      });
+      
+      if (!regularUser) {
+        console.log('❌ No user found with email:', email);
         return done(null, false, { message: 'Invalid email or password' });
       }
       
-      console.log('👤 Admin found:', admin.email);
+      console.log('👤 User found:', regularUser.email);
       
       // Verify password
-      const isValidPassword = await bcrypt.compare(password, admin.password);
+      const isValidPassword = await bcrypt.compare(password, regularUser.password);
       if (!isValidPassword) {
-        console.log('❌ Invalid password for admin:', admin.email);
+        console.log('❌ Invalid password for user:', regularUser.email);
         return done(null, false, { message: 'Invalid email or password' });
       }
       
-      console.log('✅ Password valid for admin:', admin.email);
+      console.log('✅ Password valid for user:', regularUser.email);
       
-      // Return admin data as user
+      // Return user data
       const user: User = {
-        id: admin.id.toString(),
-        email: admin.email,
-        username: admin.username,
-        password: admin.password,
-        role: admin.role === 'admin' ? 'admin' : 'user',
-        avatar: admin.profilePic,
+        id: regularUser.id.toString(),
+        email: regularUser.email,
+        username: email.split('@')[0], // Use email prefix as username
+        password: regularUser.password,
+        role: 'user',
+        avatar: null,
         bio: null,
-        createdAt: admin.createdAt,
-        updatedAt: admin.updatedAt || new Date()
+        createdAt: regularUser.createdAt,
+        updatedAt: new Date()
       };
       
       return done(null, user);
@@ -250,28 +289,50 @@ passport.deserializeUser(async (id: string, done) => {
     const isDbConnected = await isDatabaseConnected();
     
     if (isDbConnected) {
-      // Try to get user from database
+      // Try to get admin from database first
       const admin = await prisma.admin.findUnique({
         where: { id: parseInt(id) }
       });
       
-      if (!admin) {
-        return done(null, false);
+      if (admin) {
+        const user: User = {
+          id: admin.id.toString(),
+          email: admin.email,
+          username: admin.username,
+          password: admin.password,
+          role: admin.role === 'admin' ? 'admin' : 'user',
+          avatar: admin.profilePic,
+          bio: null,
+          createdAt: admin.createdAt,
+          updatedAt: admin.updatedAt || new Date()
+        };
+        
+        return done(null, user);
       }
       
-      const user: User = {
-        id: admin.id.toString(),
-        email: admin.email,
-        username: admin.username,
-        password: admin.password,
-        role: admin.role === 'admin' ? 'admin' : 'user',
-        avatar: admin.profilePic,
-        bio: null,
-        createdAt: admin.createdAt,
-        updatedAt: admin.updatedAt || new Date()
-      };
+      // If no admin found, try regular user
+      const regularUser = await prisma.user.findUnique({
+        where: { id: parseInt(id) }
+      });
       
-      done(null, user);
+      if (regularUser) {
+        const user: User = {
+          id: regularUser.id.toString(),
+          email: regularUser.email,
+          username: regularUser.email.split('@')[0],
+          password: regularUser.password,
+          role: 'user',
+          avatar: null,
+          bio: null,
+          createdAt: regularUser.createdAt,
+          updatedAt: new Date()
+        };
+        
+        return done(null, user);
+      }
+      
+      // No user found
+      return done(null, false);
     } else {
       // Database not available, check if it's the dev fallback user
       if (id === '1' && process.env.NODE_ENV !== 'production') {
@@ -601,16 +662,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newUser = await prisma.user.create({
         data: {
           email: email.toLowerCase(),
-          username: email.split('@')[0], // Use email prefix as username
           password: hashedPassword,
           name: name,
-          role: 'subscriber',
-          isSubscribed: subscribeToNewPosts || false,
-          isEmailVerified: false,
-          emailVerificationToken: crypto.randomBytes(32).toString('hex'),
-          emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-          createdAt: new Date(),
-          lastLogin: new Date()
+          role: 'viewer' // Using 'viewer' as defined in UserRole enum
         }
       });
       
@@ -619,19 +673,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await queueWelcomeEmail({
           email: newUser.email,
           name: newUser.name || undefined,
-          username: newUser.username,
-          subscribeToNewPosts: newUser.isSubscribed || false
+          username: email.split('@')[0], // Use email prefix as username
+          subscribeToNewPosts: subscribeToNewPosts || false
         });
-        
-        // Queue verification email
-        if (newUser.emailVerificationToken) {
-          await queueVerificationEmail(
-            { email: newUser.email, name: newUser.name || undefined },
-            newUser.emailVerificationToken
-          );
-        }
       } catch (emailError) {
-        console.error('Failed to queue welcome/verification emails:', emailError);
+        console.error('Failed to queue welcome email:', emailError);
         // Continue even if email fails
       }
       
@@ -639,13 +685,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user: User = {
         id: newUser.id.toString(),
         email: newUser.email,
-        username: newUser.username,
+        username: email.split('@')[0], // Use email prefix as username
         password: newUser.password,
         role: 'user',
         avatar: null,
         bio: null,
         createdAt: newUser.createdAt,
-        updatedAt: newUser.updatedAt || new Date()
+        updatedAt: new Date()
       };
       
       // Log user in automatically
@@ -3736,6 +3782,8 @@ app.delete("/api/admin/categories/:id", requireAdmin, async (req: Request, res: 
       
       res.json({
         ...blog,
+        hasDownload: !!blog.downloadLink, // Set hasDownload flag if downloadLink exists
+        downloadFileUrl: blog.downloadLink, // Map downloadLink to downloadFileUrl for DownloadSection
         seoMeta,
         relatedPosts: relatedBlogs
       });
@@ -3768,6 +3816,8 @@ app.delete("/api/admin/categories/:id", requireAdmin, async (req: Request, res: 
       
       res.json({
         ...blog,
+        hasDownload: !!blog.downloadLink, // Set hasDownload flag if downloadLink exists
+        downloadFileUrl: blog.downloadLink, // Map downloadLink to downloadFileUrl for DownloadSection
         seoMeta,
         relatedPosts: relatedBlogs
       });
@@ -3807,8 +3857,11 @@ app.delete("/api/admin/categories/:id", requireAdmin, async (req: Request, res: 
         return res.status(404).json({ error: "Blog not found" });
       }
       
+      // Map downloadLink to downloadFileUrl for compatibility
+      const downloadFileUrl = blog.downloadLink || blog.downloadFileUrl;
+      
       // Check if blog has download available
-      if (!blog.hasDownload || !blog.downloadFileUrl) {
+      if (!downloadFileUrl) {
         return res.status(400).json({ error: "This blog has no download available" });
       }
       
@@ -3840,21 +3893,15 @@ app.delete("/api/admin/categories/:id", requireAdmin, async (req: Request, res: 
         }
       }
       
-      // Increment download count in blogs table
-      try {
-        await storage.updateBlog(postId, {
-          downloadCount: (blog.downloadCount || 0) + 1
-        });
-      } catch (updateError) {
-        console.warn("Failed to update download count:", updateError);
-      }
+      // Note: downloadCount field doesn't exist in Blog schema
+      // Download tracking is done via Downloads table instead
       
       // Log download activity
       console.log(`Download initiated for blog ${postId} by user ${userId || 'anonymous'} from IP ${ipAddress}`);
       
-      // Prepare file for download
-      const fileUrl = blog.downloadFileUrl;
-      const fileName = blog.downloadFileName || 'download';
+      // Prepare file for download - use the mapped downloadFileUrl
+      const fileUrl = downloadFileUrl;
+      const fileName = blog.downloadFileName || blog.title || 'download';
       const fileSize = blog.downloadFileSize || 'unknown';
       
       // Check if it's a local file or external URL
@@ -4354,9 +4401,9 @@ app.delete("/api/admin/categories/:id", requireAdmin, async (req: Request, res: 
     try {
       const daysOld = parseInt(req.query.days as string) || 30;
       
-      const signalsDeleted = await cleanupOldFiles(path.join(__dirname, 'uploads/signals'), daysOld);
-      const previewsDeleted = await cleanupOldFiles(path.join(__dirname, 'uploads/previews'), daysOld);
-      const mediaDeleted = await cleanupOldFiles(path.join(__dirname, 'uploads/media'), daysOld);
+      const signalsDeleted = await cleanupOldFiles(path.join(__dirname, 'uploads', 'signals'), daysOld);
+      const previewsDeleted = await cleanupOldFiles(path.join(__dirname, 'uploads', 'previews'), daysOld);
+      const mediaDeleted = await cleanupOldFiles(path.join(__dirname, 'uploads', 'media'), daysOld);
       
       const totalDeleted = signalsDeleted + previewsDeleted + mediaDeleted;
       
@@ -4405,21 +4452,14 @@ app.delete("/api/admin/categories/:id", requireAdmin, async (req: Request, res: 
       // Extract filename from screenshot URL
       const fileName = screenshot.split('/').pop() || 'signal-screenshot.png';
       
-      // Build the complete signal data with defaults
+      // Build the signal data with only fields that exist in the schema
       const signalData = {
         uuid: uuid,
         title: title,
         description: description,
         filePath: screenshot, // Using screenshot URL as filePath
         mime: 'image/png', // Default to PNG for screenshots
-        sizeBytes: 0, // Default size (can be updated later)
-        platform: 'Both' as const,
-        status: 'active',
-        screenshots: JSON.stringify([screenshot]), // Store screenshot in screenshots array
-        downloadCount: 0,
-        rating: 0,
-        isPremium: false,
-        version: '1.0.0'
+        sizeBytes: 0 // Default size (can be updated later)
       };
       
       // Create the signal with auto-generated data
@@ -4523,9 +4563,19 @@ app.delete("/api/admin/categories/:id", requireAdmin, async (req: Request, res: 
   // POST /api/upload - Get presigned URL for general file uploads (no auth required)
   app.post("/api/upload", async (req: Request, res: Response) => {
     try {
-      const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      res.json({ uploadURL });
+      // Try object storage first, fallback to local storage
+      try {
+        const objectStorageService = new ObjectStorageService();
+        const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+        res.json({ uploadURL });
+      } catch (storageError) {
+        console.warn("Object storage not available, using local storage fallback");
+        // Generate a unique filename for local upload
+        const timestamp = Date.now();
+        const randomId = Math.random().toString(36).substring(7);
+        const uploadURL = `/uploads/temp/${timestamp}-${randomId}`;
+        res.json({ uploadURL, isLocalUpload: true });
+      }
     } catch (error: any) {
       console.error("Error getting upload URL:", error);
       res.status(500).json({ error: "Failed to get upload URL", message: error.message });
@@ -4539,27 +4589,50 @@ app.delete("/api/admin/categories/:id", requireAdmin, async (req: Request, res: 
         return res.status(400).json({ error: "uploadURL is required" });
       }
 
-      const userId = req.user?.id || 'anonymous';
-      const objectStorageService = new ObjectStorageService();
+      const uploadURL = req.body.uploadURL;
       
-      // Set ACL policy to make the image public
-      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
-        req.body.uploadURL,
-        {
-          owner: userId,
-          visibility: "public", // Public for uploaded images
-          aclRules: []
-        }
-      );
+      // Check if this is a local upload (starts with /uploads/)
+      if (uploadURL.startsWith('/uploads/')) {
+        // Local upload - just return the path as-is
+        console.log('Completing local upload:', uploadURL);
+        return res.status(200).json({
+          success: true,
+          objectPath: uploadURL,
+          publicUrl: uploadURL
+        });
+      }
 
-      res.status(200).json({
-        success: true,
-        objectPath: objectPath,
-        // Construct the public URL for the image
-        publicUrl: objectPath
-      });
+      // Try object storage for external uploads
+      try {
+        const userId = req.user?.id || 'anonymous';
+        const objectStorageService = new ObjectStorageService();
+        
+        // Set ACL policy to make the image public
+        const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
+          uploadURL,
+          {
+            owner: userId,
+            visibility: "public",
+            aclRules: []
+          }
+        );
+
+        res.status(200).json({
+          success: true,
+          objectPath: objectPath,
+          publicUrl: objectPath
+        });
+      } catch (storageError) {
+        console.warn('Object storage not available for completion, using URL as-is');
+        // Fallback: just return the URL
+        res.status(200).json({
+          success: true,
+          objectPath: uploadURL,
+          publicUrl: uploadURL
+        });
+      }
     } catch (error: any) {
-      console.error("Error setting ACL policy:", error);
+      console.error("Error completing upload:", error);
       res.status(500).json({ error: "Failed to complete upload", message: error.message });
     }
   });

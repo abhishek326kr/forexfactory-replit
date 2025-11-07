@@ -13,7 +13,6 @@ import Blog from "@/pages/Blog";
 import BlogEnhanced from "@/pages/BlogEnhanced";
 import BlogDetail from "@/pages/BlogDetail";
 import Category from "@/pages/Category";
-import Search from "@/pages/Search";
 import SearchResults from "@/pages/SearchResults";
 import About from "@/pages/About";
 import Contact from "@/pages/Contact";
@@ -21,6 +20,7 @@ import Signals from "@/pages/Signals";
 
 // Import authentication pages
 import Login from "@/pages/Login";
+import UserLogin from "@/pages/UserLogin";
 
 // Import user pages
 import UserSettings from "@/pages/UserSettings";
@@ -58,6 +58,7 @@ function Router() {
       
       {/* Authentication */}
       <Route path="/login" component={Login} />
+      <Route path="/user/login" component={UserLogin} />
       
       {/* User Settings - Protected */}
       <Route path="/settings">
