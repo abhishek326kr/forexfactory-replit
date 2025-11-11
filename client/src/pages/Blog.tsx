@@ -27,7 +27,11 @@ export default function Blog() {
   const postsPerPage = 9;
 
   // Fetch posts from real API with server-side pagination and filtering
-  const { data: postsData, isLoading: postsLoading, error: postsError } = useQuery({
+  const { data: postsData, isLoading: postsLoading, error: postsError } = useQuery<{
+    posts: any[];
+    total: number;
+    totalPages: number;
+  }>({
     queryKey: ['/api/blogs', category, searchQuery, selectedTag, sortBy, page],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -73,12 +77,12 @@ export default function Blog() {
   });
 
   // Fetch categories
-  const { data: categories } = useQuery({
+  const { data: categories } = useQuery<any[]>({
     queryKey: ['/api/categories']
   });
 
   // Fetch popular tags
-  const { data: popularTags } = useQuery({
+  const { data: popularTags } = useQuery<any[]>({
     queryKey: ['/api/tags/popular']
   });
 
@@ -160,7 +164,7 @@ export default function Blog() {
                 </Card>
                 
                 {/* Categories */}
-                {categories && (
+                {!!categories && (
                   <CategoryFilter 
                     categories={categories as any} 
                     selectedCategory={category}
@@ -168,14 +172,14 @@ export default function Blog() {
                 )}
                 
                 {/* Popular Tags */}
-                {popularTags && (popularTags as any[]).length > 0 && (
+                {Array.isArray(popularTags) && popularTags.length > 0 && (
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-base">Popular Tags</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="flex flex-wrap gap-2">
-                        {(popularTags as any[]).map((tag: any) => (
+                        {popularTags.map((tag: any) => (
                           <Badge
                             key={tag.id}
                             variant={selectedTag === tag.name ? "default" : "secondary"}

@@ -16,18 +16,28 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { generateOptimizedTitle, generateOptimizedMetaDescription, PRIMARY_KEYWORDS } from '@/lib/keywords';
 
 export default function Home() {
-  // Fetch featured blogs
-  const { data: featuredBlogs, isLoading: featuredBlogsLoading, error: featuredBlogsError } = useQuery({
-    queryKey: ['/api/blogs/featured'],
-    select: (data: any) => data?.data || []
+  // Fetch latest blogs
+  const { data: latestBlogs, isLoading: latestBlogsLoading } = useQuery({
+    queryKey: ['/api/blogs', 'latest', { limit: 3 }],
+    queryFn: async () => {
+      const res = await fetch('/api/blogs?limit=3&sortBy=createdAt&sortOrder=desc');
+      if (!res.ok) return { data: [] };
+      return res.json();
+    },
+    select: (data: any) => data?.data || data?.blogs || []
   });
-  
-  // Fetch recent blogs
-  const { data: recentBlogs, isLoading: recentBlogsLoading, error: blogsError } = useQuery({
-    queryKey: ['/api/blogs/recent'],
-    select: (data: any) => data?.data || []
+
+  // Fetch popular blogs (most viewed)
+  const { data: popularBlogs, isLoading: popularBlogsLoading } = useQuery({
+    queryKey: ['/api/blogs', 'popular', { limit: 3 }],
+    queryFn: async () => {
+      const res = await fetch('/api/blogs?limit=3&sortBy=views&sortOrder=desc');
+      if (!res.ok) return { data: [] };
+      return res.json();
+    },
+    select: (data: any) => data?.data || data?.blogs || []
   });
-  
+
   // Fetch top-rated signals (downloads)
   const { data: topSignals, isLoading: signalsLoading, error: signalsError } = useQuery({
     queryKey: ['/api/signals', { sortBy: 'createdAt', limit: 6 }],
@@ -43,7 +53,7 @@ export default function Home() {
     },
     select: (data: any) => data?.data?.slice(0, 6) || []
   });
-  
+
   // Fetch stats from various endpoints
   const { data: stats } = useQuery({
     queryKey: ['/api/stats'],
@@ -53,10 +63,10 @@ export default function Home() {
           fetch('/api/blogs?limit=1'),
           fetch('/api/signals?limit=1')
         ]);
-        
+
         const blogsData = await blogsRes.json();
         const signalsData = await signalsRes.json();
-        
+
         return {
           totalDownloads: Math.floor(Math.random() * 100000) + 400000, // Placeholder
           totalEAs: signalsData.total || 500,
@@ -75,13 +85,14 @@ export default function Home() {
       }
     }
   });
-  
+
   // Combine loading states
   const downloadsLoading = signalsLoading;
-  const postsLoading = recentBlogsLoading || featuredBlogsLoading;
-  
+  const postsLoading = latestBlogsLoading;
+
   // Use featured blogs if available, otherwise use recent blogs
-  const posts = featuredBlogs?.length > 0 ? featuredBlogs.slice(0, 3) : recentBlogs?.slice(0, 3) || [];
+  const posts = latestBlogs || [];
+
   const downloads = topSignals || [];
 
   const pageTitle = generateOptimizedTitle('HOME', {
@@ -117,11 +128,11 @@ export default function Home() {
             <div className="flex flex-wrap justify-center items-center gap-8 md:gap-12">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
-                <span className="font-medium">100% Free Downloads</span>
+                <span className="font-medium">Real-time Signals</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <TrendingUp className="h-5 w-5 text-blue-600" />
-                <span className="font-medium">Updated Weekly</span>
+                <span className="font-medium">Updated Daily</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Users className="h-5 w-5 text-purple-600" />
@@ -129,25 +140,98 @@ export default function Home() {
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Star className="h-5 w-5 text-yellow-600" />
-                <span className="font-medium">Verified & Tested EAs</span>
+                <span className="font-medium">Verified Strategies</span>
               </div>
             </div>
           </div>
         </section>
         
-        {/* Featured Downloads Section */}
+        {/* Popular Blog Posts */}
+        <section className="py-12 md:py-20">
+          <div className="max-w-7xl mx-auto px-4 md:px-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12">
+              <div>
+                <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                  Popular Posts
+                </h2>
+                <p className="text-lg text-muted-foreground">
+                  Most viewed articles by our readers
+                </p>
+              </div>
+              <Link href="/blog">
+                <Button variant="outline" className="mt-4 md:mt-0">
+                  Explore Blog
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+
+            {popularBlogsLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+                {[...Array(3)].map((_, i) => (
+                  <Card key={i} className="overflow-hidden">
+                    <Skeleton className="h-48 w-full" />
+                    <CardContent className="p-6">
+                      <Skeleton className="h-6 w-3/4 mb-2" />
+                      <Skeleton className="h-4 w-full mb-2" />
+                      <Skeleton className="h-4 w-5/6" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+                {popularBlogs?.map((post: any) => {
+                  const stripHtml = (html: string) => {
+                    if (!html) return '';
+                    return html
+                      .replace(/<[^>]*>/g, '')
+                      .replace(/&nbsp;/g, ' ')
+                      .replace(/&amp;/g, '&')
+                      .replace(/&lt;/g, '<')
+                      .replace(/&gt;/g, '>')
+                      .replace(/&quot;/g, '"')
+                      .replace(/&#39;/g, "'")
+                      .trim();
+                  };
+
+                  const content = stripHtml(post.content || '');
+                  const excerpt = content.length > 150 ? content.substring(0, 150) + '...' : content;
+
+                  const transformedPost = {
+                    id: String(post.id),
+                    title: post.title || 'Untitled',
+                    excerpt: excerpt || 'No preview available',
+                    category: post.category || 'General',
+                    author: post.author || 'Admin',
+                    date: post.createdAt,
+                    readTime: 5,
+                    image: post.featuredImage || post.image || '/placeholder.jpg',
+                    slug: post.seoSlug || post.slug || String(post.id),
+                    tags: typeof post.tags === 'string' && post.tags 
+                      ? post.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+                      : post.tags || []
+                  };
+
+                  return <BlogCard key={transformedPost.id} {...transformedPost} />;
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Featured Signals Section */}
         <section className="py-12 md:py-20">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <div className="text-center mb-12">
               <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                Featured Expert Advisors & Trading Robots
+                Featured Signals & Predictions
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Download the best Forex EA and automated trading solutions for MT4/MT5. 
-                All Expert Advisors are tested and verified for performance.
+                Explore our latest trading signals and strategy insights for MT4/MT5.
               </p>
             </div>
-            
+
             {downloadsLoading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
                 {[...Array(6)].map((_, i) => (
@@ -163,16 +247,62 @@ export default function Home() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-                {downloads?.map((download: any) => (
-                  <DownloadCard key={download.id} {...download} />
-                ))}
+                {downloads?.map((signal: any) => {
+                  const getScreenshot = (s: any) => {
+                    const normalize = (url?: string | null) => {
+                      if (!url) return undefined;
+                      const u = url.trim();
+                      if (!u) return undefined;
+                      if (u.startsWith('http://') || u.startsWith('https://')) return u;
+                      if (u.startsWith('/')) return u;
+                      return `/${u}`;
+                    };
+                    const raw = s.screenshots || s.filePath || '';
+                    try {
+                      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                      if (Array.isArray(parsed) && parsed.length) return normalize(parsed[0]);
+                      if (parsed && typeof parsed === 'object') {
+                        const arr = parsed.images || parsed.screenshots || [];
+                        if (Array.isArray(arr) && arr.length) return normalize(arr[0]);
+                      }
+                      if (typeof raw === 'string') {
+                        const parts = raw.split(',').map(x => x.trim()).filter(Boolean);
+                        if (parts.length) return normalize(parts[0]);
+                        return normalize(raw);
+                      }
+                    } catch {}
+                    return undefined;
+                  };
+
+                  const img = getScreenshot(signal);
+                  return (
+                    <Card key={signal.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                      <div className="aspect-video bg-muted">
+                        {img ? (
+                          <img src={img} alt={signal.title} className="w-full h-full object-cover" />
+                        ) : null}
+                      </div>
+                      <CardContent className="p-6">
+                        <h3 className="font-semibold text-lg mb-2 line-clamp-1">{signal.title}</h3>
+                        <div className="text-sm text-muted-foreground line-clamp-2 mb-4" dangerouslySetInnerHTML={{ __html: signal.description || '' }} />
+                        <div className="flex items-center justify-between text-sm text-muted-foreground mb-3">
+                          <span className="truncate">{signal.platform || 'Signal'}</span>
+                          {signal.strategy && (
+                            <Badge variant="outline" className="text-xs">{signal.strategy}</Badge>
+                          )}
+                        </div>
+                        <Button className="w-full" size="sm" onClick={() => window.location.href = `/signals/${signal.uuid || signal.id}`}>View Signal</Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
-            
+
             <div className="text-center mt-10">
-              <Link href="/downloads">
-                <Button size="lg" className="gap-2" data-testid="button-view-all-downloads">
-                  View All Downloads
+              <Link href="/signals">
+                <Button size="lg" className="gap-2" data-testid="button-view-all-signals">
+                  View All Signals
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>

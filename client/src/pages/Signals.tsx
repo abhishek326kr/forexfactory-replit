@@ -77,18 +77,42 @@ export default function Signals() {
   };
 
   const getScreenshot = (signal: Signal) => {
+    const normalize = (url?: string | null) => {
+      if (!url) return undefined;
+      // trim and ensure leading slash for local assets
+      const u = url.trim();
+      if (!u) return undefined;
+      if (u.startsWith('http://') || u.startsWith('https://')) return u;
+      if (u.startsWith('/')) return u;
+      return `/${u}`;
+    };
+
+    let first: string | undefined;
     if (signal.screenshots) {
+      // Try JSON array or object with array
       try {
-        const screenshots = JSON.parse(signal.screenshots);
-        return screenshots[0] || signal.filePath;
+        const parsed = JSON.parse(signal.screenshots);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          first = parsed[0];
+        } else if (parsed && typeof parsed === 'object') {
+          const arr = (parsed.images || parsed.screenshots || []) as string[];
+          if (Array.isArray(arr) && arr.length > 0) first = arr[0];
+        } else if (typeof parsed === 'string') {
+          first = parsed;
+        }
       } catch {
-        return signal.filePath;
+        // Try CSV or single url when screenshots is a plain string
+        if (typeof signal.screenshots === 'string') {
+          const s = signal.screenshots.split(',').map(s => s.trim()).filter(Boolean);
+          if (s.length > 0) first = s[0];
+        }
       }
     }
-    return signal.filePath;
+    if (!first && signal.filePath) first = signal.filePath;
+    return normalize(first);
   };
 
-  const pageTitle = 'Forex Trading Signals & Expert Advisors - Free MT4/MT5 EAs';
+  const pageTitle = 'Forex Trading Signals & Predictions - MT4/MT5';
   const metaDescription = generateOptimizedMetaDescription('SIGNAL', {
     topic: 'Expert Advisors and trading signals',
     benefit: 'automated trading strategies',
@@ -112,11 +136,10 @@ export default function Signals() {
         <section className="py-12 md:py-16 bg-muted/30">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <h1 className="text-3xl md:text-5xl font-bold mb-4">
-              Trading Signals & Expert Advisors
+              Trading Signals & Strategy Insights
             </h1>
             <p className="text-lg text-muted-foreground max-w-3xl">
-              Discover proven trading strategies and Expert Advisors for MetaTrader 4 & 5. 
-              Download free EAs and automated trading systems tested by professionals.
+              Discover actionable trading signals and strategy insights for MetaTrader 4 & 5.
             </p>
           </div>
         </section>
@@ -297,16 +320,14 @@ export default function Signals() {
                           </h3>
                           
                           {/* Description */}
-                          <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-                            {signal.description}
-                          </p>
+                          <div
+                            className="text-sm text-muted-foreground line-clamp-2 mb-4"
+                            dangerouslySetInnerHTML={{ __html: signal.description }}
+                          />
 
-                          {/* Stats */}
+                          {/* Meta */}
                           <div className="flex items-center justify-between text-sm text-muted-foreground mb-3">
-                            <div className="flex items-center gap-1">
-                              <Download className="h-4 w-4" />
-                              <span>{signal.downloadCount || 0} downloads</span>
-                            </div>
+                            <span className="truncate">{signal.platform || 'Signal'}</span>
                             {signal.strategy && (
                               <Badge variant="outline" className="text-xs">
                                 {signal.strategy}
@@ -318,7 +339,7 @@ export default function Signals() {
                           <Button 
                             className="w-full" 
                             size="sm"
-                            onClick={() => window.location.href = `/signal/${signal.uuid || signal.id}`}
+                            onClick={() => window.location.href = `/signals/${signal.uuid || signal.id}`}
                           >
                             View Details
                           </Button>

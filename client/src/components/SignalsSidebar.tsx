@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Bot, Download, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface Signal {
   id: string;
@@ -18,6 +20,8 @@ interface Signal {
 }
 
 export default function SignalsSidebar() {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState<Signal | null>(null);
   // Fetch latest signals
   const { data: signals, isLoading } = useQuery({
     queryKey: ['/api/signals', 'sidebar'],
@@ -35,15 +39,32 @@ export default function SignalsSidebar() {
   });
 
   const getScreenshot = (signal: Signal) => {
+    const normalize = (url?: string | null) => {
+      if (!url) return undefined;
+      const u = url.trim();
+      if (!u) return undefined;
+      if (u.startsWith('http://') || u.startsWith('https://')) return u;
+      if (u.startsWith('/')) return u;
+      return `/${u}`;
+    };
+
+    let first: string | undefined = undefined;
     if (signal.screenshots) {
       try {
-        const screenshots = JSON.parse(signal.screenshots);
-        return screenshots[0];
+        const parsed = JSON.parse(signal.screenshots);
+        if (Array.isArray(parsed) && parsed.length > 0) first = parsed[0];
+        else if (parsed && typeof parsed === 'object') {
+          const arr = (parsed.images || parsed.screenshots || []) as string[];
+          if (Array.isArray(arr) && arr.length > 0) first = arr[0];
+        } else if (typeof parsed === 'string') first = parsed;
       } catch {
-        return null;
+        if (typeof signal.screenshots === 'string') {
+          const parts = signal.screenshots.split(',').map(s => s.trim()).filter(Boolean);
+          if (parts.length > 0) first = parts[0];
+        }
       }
     }
-    return null;
+    return normalize(first);
   };
 
   return (
@@ -91,19 +112,17 @@ export default function SignalsSidebar() {
                   </h4>
                   
                   {/* Description */}
-                  <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                    {signal.description}
-                  </p>
+                  <div
+                    className="text-xs text-muted-foreground line-clamp-2 mb-2"
+                    dangerouslySetInnerHTML={{ __html: signal.description }}
+                  />
                   
-                  {/* Stats */}
+                  {/* Meta */}
                   <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-                    <div className="flex items-center gap-1">
-                      <Download className="h-3 w-3" />
-                      <span>{signal.downloadCount || 0}</span>
-                    </div>
-                    {signal.platform && (
+                    <span className="truncate">{signal.platform || 'Signal'}</span>
+                    {signal.strategy && (
                       <Badge variant="outline" className="text-xs py-0 px-1">
-                        {signal.platform}
+                        {signal.strategy}
                       </Badge>
                     )}
                   </div>
@@ -113,7 +132,7 @@ export default function SignalsSidebar() {
                     variant="outline" 
                     size="sm" 
                     className="w-full text-xs"
-                    onClick={() => window.location.href = `/signal/${signal.uuid || signal.id}`}
+                    onClick={() => { setActive(signal); setOpen(true); }}
                   >
                     View Signal
                   </Button>
@@ -156,6 +175,51 @@ export default function SignalsSidebar() {
           </ul>
         </CardContent>
       </Card>
+
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setActive(null); }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{active?.title || 'Signal'}</DialogTitle>
+            <DialogDescription className="flex items-center gap-2">
+              {active?.platform && (
+                <Badge variant="outline" className="text-xs">{active.platform}</Badge>
+              )}
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Download className="h-3 w-3" /> {active?.downloadCount || 0}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {active && (
+            <div className="space-y-4">
+              {(() => {
+                const src = getScreenshot(active);
+                return src ? (
+                  <div className="aspect-video rounded overflow-hidden bg-muted">
+                    <img
+                      src={src}
+                      alt={active.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                ) : null;
+              })()}
+              <div
+                className="prose max-w-none text-sm"
+                dangerouslySetInnerHTML={{ __html: active.description }}
+              />
+            </div>
+          )}
+
+          <DialogFooter className="flex justify-between">
+            <Button variant="ghost" onClick={() => setOpen(false)}>Close</Button>
+            {active && (
+              <Button onClick={() => { window.location.href = `/signals/${active.uuid || active.id}`; }}>Open Full Page</Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

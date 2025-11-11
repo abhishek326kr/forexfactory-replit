@@ -183,7 +183,11 @@ passport.use(new LocalStrategy(
         where: {
           OR: [
             { email: email },
-            { username: email }
+            { email: email.toLowerCase() },
+            { email: email.toUpperCase() },
+            { username: email },
+            { username: email.toLowerCase() },
+            { username: email.toUpperCase() }
           ]
         }
       });
@@ -191,8 +195,13 @@ passport.use(new LocalStrategy(
       if (admin) {
         console.log('👤 Admin found:', admin.email);
         
-        // Verify password
-        const isValidPassword = await bcrypt.compare(password, admin.password);
+        // Verify password (supports bcrypt hash or plaintext stored value)
+        let isValidPassword = false;
+        if (admin.password && admin.password.startsWith('$2')) {
+          isValidPassword = await bcrypt.compare(password, admin.password);
+        } else {
+          isValidPassword = password === admin.password;
+        }
         if (!isValidPassword) {
           console.log('❌ Invalid password for admin:', admin.email);
           return done(null, false, { message: 'Invalid email or password' });
@@ -580,6 +589,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   });
 
+  // Dynamically select storage on each API request based on current DB connectivity
+  app.use('/api', async (_req, _res, next) => {
+    try {
+      const connected = await isDatabaseConnected();
+      if (connected && storageType !== 'prisma') {
+        await prismaStorage.initialize();
+        storage = prismaStorage;
+        storageType = 'prisma';
+        console.log('🔁 Switched storage to PrismaStorage (DB connected)');
+      } else if (!connected && storageType !== 'memory') {
+        storage = memStorage;
+        storageType = 'memory';
+        console.log('🔁 Switched storage to MemStorage (DB unavailable)');
+      }
+    } catch (e) {
+      // On any error, prefer not to block the request
+    } finally {
+      next();
+    }
+  });
+
   // SEO Routes - These should be at the root level, not under /api
   app.get("/robots.txt", generateDynamicRobotsTxt);
   
@@ -790,6 +820,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       authenticated: true, 
       user: userWithoutPassword 
     });
+  });
+
+  // POST /api/admin/bootstrap - Create or update an admin account securely
+  app.post("/api/admin/bootstrap", async (req: Request, res: Response) => {
+    try {
+      // In production require a setup key; allow freely in development for local setup
+      const providedKey = (req.headers['x-admin-key'] as string) || (req.query.key as string);
+      const requireKey = process.env.NODE_ENV === 'production';
+      if (requireKey) {
+        if (!process.env.ADMIN_SETUP_KEY || providedKey !== process.env.ADMIN_SETUP_KEY) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+      }
+
+      const { email, password, username, name } = req.body || {};
+      const targetEmail = (email || 'admin@yoforex.net').trim();
+      const rawPassword = (password || 'Yoforex@101').trim();
+      const targetUsername = (username || (targetEmail.includes('@') ? targetEmail.split('@')[0] : 'admin')).trim();
+      const displayName = (name || 'Administrator').trim();
+
+      if (!targetEmail || !rawPassword) {
+        return res.status(400).json({ error: 'Email and password are required' });
+      }
+
+      const hashed = await bcrypt.hash(rawPassword, 10);
+
+      const admin = await prisma.admin.upsert({
+        where: { email: targetEmail },
+        update: {
+          username: targetUsername,
+          name: displayName,
+          password: hashed,
+          role: 'admin'
+        },
+        create: {
+          email: targetEmail,
+          username: targetUsername,
+          name: displayName,
+          password: hashed,
+          role: 'admin'
+        }
+      });
+
+      return res.json({ success: true, id: admin.id, email: admin.email, username: admin.username });
+    } catch (error: any) {
+      console.error('Admin bootstrap failed:', error);
+      return res.status(500).json({ error: 'Failed to bootstrap admin', message: error.message });
+    }
   });
 
   // ==================== EMAIL PREFERENCES ENDPOINTS ====================
@@ -3652,7 +3730,7 @@ app.put("/api/admin/categories/:id", requireAdmin, async (req: Request, res: Res
     }
     
     res.json({
-      id: category.categoryId.toString(),
+      id: String((category as any).categoryId ?? (category as any).category_id ?? (category as any).id),
       name: category.name,
       slug: category.slug || category.name.toLowerCase().replace(/\s+/g, '-'),
       description: category.description,
@@ -3766,64 +3844,90 @@ app.delete("/api/admin/categories/:id", requireAdmin, async (req: Request, res: 
   app.get("/api/blogs/slug/:slug", async (req: Request, res: Response) => {
     try {
       const { slug } = req.params;
-      const blog = await storage.getBlogBySlug(slug);
-      
-      if (!blog) {
-        return res.status(404).json({ error: "Blog not found" });
-      }
-      
-      const [seoMeta, relatedBlogs] = await Promise.all([
-        storage.getSeoMetaByPostId(blog.id),
-        storage.getRelatedBlogs(blog.id, 5)
-      ]);
-      
-      // Increment views
-      await storage.incrementBlogViews(blog.id);
-      
-      res.json({
-        ...blog,
-        hasDownload: !!blog.downloadLink, // Set hasDownload flag if downloadLink exists
-        downloadFileUrl: blog.downloadLink, // Map downloadLink to downloadFileUrl for DownloadSection
-        seoMeta,
-        relatedPosts: relatedBlogs
-      });
-    } catch (error: any) {
-      console.error("Error fetching blog by slug:", error);
-      res.status(500).json({ error: "Failed to fetch blog", message: error.message });
-    }
-  });
+      let blog: any = null;
+      let seoMeta: any = null;
+      let relatedBlogs: any[] = [];
 
-  // GET /api/blogs/:id - Get single blog with SEO meta and related posts
-  app.get("/api/blogs/:id", async (req: Request, res: Response) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ error: "Invalid blog ID" });
+      // Try Prisma first (direct DB), then fall back to storage (memory)
+      try {
+        blog = await prisma.blog.findFirst({ where: { seoSlug: slug } });
+        if (blog) {
+          [seoMeta, relatedBlogs] = await Promise.all([
+            prisma.seoMeta.findFirst({ where: { postId: blog.id } }),
+            prisma.blog.findMany({
+              where: { id: { not: blog.id }, status: 'published' },
+              take: 5,
+              orderBy: { createdAt: 'desc' }
+            })
+          ]);
+          await prisma.blog.update({ where: { id: blog.id }, data: { views: { increment: 1 } } });
+        }
+      } catch (_) {
+        // Ignore and fall back to storage
       }
-      
-      const [blog, seoMeta, relatedBlogs] = await Promise.all([
-        storage.getBlogById(id),
-        storage.getSeoMetaByPostId(id),
-        storage.getRelatedBlogs(id, 5)
-      ]);
-      
+
       if (!blog) {
-        return res.status(404).json({ error: "Blog not found" });
+        // Attempt to resolve via storage by slug first
+        blog = await storage.getBlogBySlug(slug);
+
+        // If not found and slug is numeric, try ID-based lookup to support legacy links
+        if (!blog) {
+          const numericId = Number(slug);
+          if (!Number.isNaN(numericId)) {
+            // Try Prisma by ID
+            try {
+              const byId = await prisma.blog.findUnique({ where: { id: numericId } });
+              if (byId) {
+                blog = byId;
+                [seoMeta, relatedBlogs] = await Promise.all([
+                  prisma.seoMeta.findFirst({ where: { postId: byId.id } }),
+                  prisma.blog.findMany({
+                    where: { id: { not: byId.id }, status: 'published' },
+                    take: 5,
+                    orderBy: { createdAt: 'desc' }
+                  })
+                ]);
+                await prisma.blog.update({ where: { id: byId.id }, data: { views: { increment: 1 } } });
+              }
+            } catch (_) {
+              // ignore
+            }
+
+            // If still not found, try storage by ID
+            if (!blog) {
+              const byIdStorage = await storage.getBlogById(numericId);
+              if (byIdStorage) {
+                blog = byIdStorage;
+              }
+            }
+          }
+        }
+
+        if (!blog) {
+          return res.status(404).json({ error: "Blog not found" });
+        }
+
+        // Fetch associated meta/related and increment views using storage if not already done above
+        if (!seoMeta) {
+          [seoMeta, relatedBlogs] = await Promise.all([
+            storage.getSeoMetaByPostId(blog.id),
+            storage.getRelatedBlogs(blog.id, 5)
+          ]);
+        }
+        // Increment view count via storage when Prisma path didn't already
+        try { await storage.incrementBlogViews(blog.id); } catch (_) { /* ignore */ }
       }
-      
-      // Increment views
-      await storage.incrementBlogViews(id);
-      
-      res.json({
+
+      return res.json({
         ...blog,
-        hasDownload: !!blog.downloadLink, // Set hasDownload flag if downloadLink exists
-        downloadFileUrl: blog.downloadLink, // Map downloadLink to downloadFileUrl for DownloadSection
+        hasDownload: !!blog.downloadLink,
+        downloadFileUrl: blog.downloadLink,
         seoMeta,
         relatedPosts: relatedBlogs
       });
     } catch (error: any) {
       console.error("Error fetching blog:", error);
-      res.status(500).json({ error: "Failed to fetch blog", message: error.message });
+      return res.status(500).json({ error: "Failed to fetch blog", message: error.message });
     }
   });
 
@@ -3973,8 +4077,13 @@ app.delete("/api/admin/categories/:id", requireAdmin, async (req: Request, res: 
         return res.status(400).json({ error: "Invalid blog ID" });
       }
       
-      // Get blog before deletion to trigger SEO updates
-      const blog = await storage.getBlogById(id);
+      // Get blog before deletion to trigger SEO updates (best-effort)
+      let blog: any = null;
+      try {
+        blog = await storage.getBlogById(id);
+      } catch (e) {
+        console.warn('Proceeding with deletion without prefetching blog due to storage error');
+      }
       
       const success = await storage.deleteBlog(id);
       
@@ -4187,17 +4296,21 @@ app.delete("/api/admin/categories/:id", requireAdmin, async (req: Request, res: 
   // GET /api/signals/:id - Get single signal with details
   app.get("/api/signals/:id", async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ error: "Invalid signal ID" });
+      const raw = req.params.id;
+      const numericId = parseInt(raw);
+
+      let signal: any | undefined;
+      if (!isNaN(numericId)) {
+        signal = await storage.getSignalById(numericId);
+      } else {
+        // Treat as UUID when not numeric
+        signal = await storage.getSignalByUuid(raw);
       }
-      
-      const signal = await storage.getSignalById(id);
-      
+
       if (!signal) {
         return res.status(404).json({ error: "Signal not found" });
       }
-      
+
       res.json(signal);
     } catch (error: any) {
       console.error("Error fetching signal:", error);

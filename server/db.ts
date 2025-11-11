@@ -11,10 +11,13 @@ const globalForPrisma = globalThis as unknown as {
   };
 };
 
-// Add connection timeout to DATABASE_URL for Neon scale-to-zero support
+// Add connection timeout to DATABASE_URL for Neon scale-to-zero support (Postgres only)
 const getDatabaseUrl = () => {
   let dbUrl = process.env.DATABASE_URL;
-  if (dbUrl && !dbUrl.includes('connect_timeout')) {
+  if (!dbUrl) return dbUrl;
+
+  const isPostgres = dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://');
+  if (isPostgres && !dbUrl.includes('connect_timeout')) {
     const separator = dbUrl.includes('?') ? '&' : '?';
     dbUrl = `${dbUrl}${separator}connect_timeout=15`;
   }

@@ -1,29 +1,26 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+
 import { HelmetProvider } from 'react-helmet-async';
 import { useParams, useLocation, Link } from 'wouter';
 import { 
-  Download, Star, Package, Clock, FileText, CheckCircle2, 
-  ArrowLeft, Shield, TrendingUp, Users, AlertCircle, Code,
-  Monitor, Cpu, HardDrive
+  Star, Clock, FileText, CheckCircle2, 
+  ArrowLeft, TrendingUp, AlertCircle,
+  Monitor, Cpu, HardDrive, Users
 } from 'lucide-react';
+
 import Layout from '@/components/Layout';
 import SEOHead from '@/components/SEOHead';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
-import { useToast } from '@/hooks/use-toast';
-import { apiRequest, queryClient } from '@/lib/queryClient';
 
 export default function SignalDetail() {
   const params = useParams();
   const id = params.id as string;
   const [location] = useLocation();
-  const { toast } = useToast();
 
   // Fetch signal details
   const { data: signal, isLoading: signalLoading, error: signalError } = useQuery({
@@ -31,50 +28,16 @@ export default function SignalDetail() {
     queryFn: async () => {
       const response = await fetch(`/api/signals/${id}`);
       if (!response.ok) {
-        // Fallback to downloads endpoint
-        const fallbackResponse = await fetch(`/api/downloads/${id}`);
-        if (!fallbackResponse.ok) {
-          throw new Error('Failed to fetch signal');
-        }
-        return fallbackResponse.json();
+        throw new Error('Failed to fetch signal');
       }
       return response.json();
     },
     enabled: !!id
   });
 
-  // Track download
-  const { mutate: trackDownload, isPending: isDownloading } = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest('POST', `/api/downloads/${id}/download`, { userId: 'anonymous' });
-      return response;
-    },
-    onSuccess: (data) => {
-      // Invalidate signal query to update download count
-      queryClient.invalidateQueries({ queryKey: ['/api/signals', id] });
-      
-      // Trigger download
-      if (data.fileUrl) {
-        window.location.href = data.fileUrl;
-      }
-      
-      toast({
-        title: 'Download started!',
-        description: 'Your Expert Advisor download has begun.'
-      });
-    },
-    onError: () => {
-      toast({
-        title: 'Download failed',
-        description: 'Unable to download the file. Please try again.',
-        variant: 'destructive'
-      });
-    }
-  });
-
   const breadcrumbs = [
-    { name: 'Downloads', href: '/downloads' },
-    { name: signal?.name || 'Loading...' }
+    { name: 'Signals', href: '/signals' },
+    { name: signal?.name || signal?.title || 'Loading...' }
   ];
 
   // Calculate rating display
@@ -88,14 +51,14 @@ export default function SignalDetail() {
           <Card className="p-12 text-center">
             <CardContent>
               <AlertCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h2 className="text-2xl font-bold mb-4">Expert Advisor not found</h2>
+              <h2 className="text-2xl font-bold mb-4">Signal not found</h2>
               <p className="text-muted-foreground mb-6">
-                The EA you're looking for doesn't exist or has been removed.
+                The signal you're looking for doesn't exist or has been removed.
               </p>
-              <Link href="/downloads">
+              <Link href="/signals">
                 <Button variant="outline">
                   <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back to Downloads
+                  Back to Signals
                 </Button>
               </Link>
             </CardContent>
@@ -108,9 +71,9 @@ export default function SignalDetail() {
   return (
     <HelmetProvider>
       <SEOHead
-        title={signal?.name || 'Expert Advisor Download'}
-        description={signal?.description || ''}
-        keywords={`${signal?.name}, ${signal?.platform}, ${signal?.strategy}, forex ea, expert advisor`}
+        title={signal?.title || signal?.name || 'Trading Signal'}
+        description={typeof signal?.description === 'string' ? signal.description.replace(/<[^>]*>/g, '').slice(0, 160) : ''}
+        keywords={`${signal?.title || signal?.name}, ${signal?.platform || ''}, ${signal?.strategy || ''}, trading signal`}
         path={location}
         ogType="website"
       />
@@ -119,10 +82,10 @@ export default function SignalDetail() {
         <div className="py-12">
           <div className="max-w-7xl mx-auto px-4">
             {/* Back Button */}
-            <Link href="/downloads">
-              <Button variant="ghost" className="mb-6" data-testid="button-back-to-downloads">
+            <Link href="/signals">
+              <Button variant="ghost" className="mb-6" data-testid="button-back-to-signals">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Downloads
+                Back to Signals
               </Button>
             </Link>
             
@@ -158,16 +121,6 @@ export default function SignalDetail() {
                             {signal.strategy}
                           </Badge>
                         )}
-                        {signal.version && (
-                          <Badge variant="outline" data-testid="signal-version">
-                            v{signal.version}
-                          </Badge>
-                        )}
-                        {signal.isPremium && (
-                          <Badge variant="default" className="bg-yellow-500">
-                            Premium
-                          </Badge>
-                        )}
                       </div>
                       
                       {/* Rating */}
@@ -190,15 +143,48 @@ export default function SignalDetail() {
                       </div>
                     </div>
                     
+                    {/* Screenshot */}
+                    {(() => {
+                      const getPrimaryImage = () => {
+                        const s = (signal as any).screenshots || (signal as any).filePath || '';
+                        const normalize = (u?: string) => {
+                          if (!u) return undefined; const t = u.trim();
+                          if (!t) return undefined; if (t.startsWith('http')) return t; if (t.startsWith('/')) return t; return `/${t}`;
+                        };
+                        try {
+                          const parsed = typeof s === 'string' ? JSON.parse(s) : s;
+                          if (Array.isArray(parsed) && parsed.length) return normalize(parsed[0]);
+                          if (parsed && typeof parsed === 'object') {
+                            const arr = parsed.images || parsed.screenshots || [];
+                            if (Array.isArray(arr) && arr.length) return normalize(arr[0]);
+                          }
+                          if (typeof s === 'string') {
+                            const parts = s.split(',').map((x: string) => x.trim()).filter(Boolean);
+                            if (parts.length) return normalize(parts[0]);
+                            return normalize(s);
+                          }
+                        } catch { /* ignore */ }
+                        return undefined;
+                      };
+                      const src = getPrimaryImage();
+                      return src ? (
+                        <div className="mb-6 aspect-video rounded overflow-hidden bg-muted">
+                          <img src={src} alt={signal.title || signal.name} className="w-full h-full object-cover" />
+                        </div>
+                      ) : null;
+                    })()}
+
                     {/* Description */}
                     <Card className="mb-8">
                       <CardHeader>
-                        <CardTitle>Description</CardTitle>
+                        <CardTitle>Signal Description</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <p className="text-muted-foreground" data-testid="signal-description">
-                          {signal.description || 'Professional Expert Advisor for automated trading on MetaTrader platforms.'}
-                        </p>
+                        <div
+                          className="text-muted-foreground"
+                          data-testid="signal-description"
+                          dangerouslySetInnerHTML={{ __html: signal.description || '' }}
+                        />
                       </CardContent>
                     </Card>
                     
@@ -363,104 +349,57 @@ export default function SignalDetail() {
               
               {/* Sidebar */}
               <div className="lg:col-span-1 space-y-6">
-                {/* Download Card */}
+                {/* Snapshot Card */}
                 <Card className="sticky top-4">
                   <CardHeader>
-                    <CardTitle>Download Information</CardTitle>
+                    <CardTitle>Signal Snapshot</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {signalLoading ? (
                       <>
                         <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-4 w-3/4" />
-                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-40 w-full" />
                       </>
                     ) : signal ? (
                       <>
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">File Size</span>
-                            <span className="font-medium">{signal.fileSize || '2.4 MB'}</span>
-                          </div>
-                          
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Version</span>
-                            <span className="font-medium">{signal.version || '1.0.0'}</span>
-                          </div>
-                          
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Updated</span>
-                            <span className="font-medium">
-                              {signal.updatedAt 
-                                ? new Date(signal.updatedAt).toLocaleDateString()
-                                : 'Recently'}
-                            </span>
-                          </div>
-                          
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Downloads</span>
-                            <span className="font-medium">
-                              {signal.downloadCount || Math.floor(Math.random() * 10000) + 1000}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        <Separator />
-                        
-                        {/* Download Button */}
-                        <Button
-                          className="w-full"
-                          size="lg"
-                          onClick={() => trackDownload()}
-                          disabled={isDownloading}
-                          data-testid="button-download-signal"
-                        >
-                          {isDownloading ? (
-                            <>
-                              <span className="animate-pulse">Preparing download...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Download className="mr-2 h-5 w-5" />
-                              Download {signal.platform || 'EA'}
-                            </>
+                        {(() => {
+                          const primary = (() => {
+                            const s = (signal as any).screenshots || (signal as any).filePath || '';
+                            try {
+                              const parsed = typeof s === 'string' ? JSON.parse(s) : s;
+                              if (Array.isArray(parsed) && parsed.length) return parsed[0];
+                              if (parsed && typeof parsed === 'object') {
+                                const arr = parsed.images || parsed.screenshots || [];
+                                if (Array.isArray(arr) && arr.length) return arr[0];
+                              }
+                              if (typeof s === 'string') return s.split(',')[0];
+                            } catch { return (signal as any).filePath; }
+                            return (signal as any).filePath;
+                          })();
+                          const normalize = (u?: string) => u ? (u.startsWith('http') || u.startsWith('/') ? u : `/${u}`) : undefined;
+                          const src = normalize(primary);
+                          return src ? (
+                            <div className="aspect-video rounded overflow-hidden bg-muted">
+                              <img src={src} alt={signal.title || signal.name} className="w-full h-full object-cover" />
+                            </div>
+                          ) : null;
+                        })()}
+                        <div className="space-y-2 text-sm">
+                          {signal.platform && (
+                            <div className="flex justify-between"><span className="text-muted-foreground">Platform</span><span className="font-medium">{signal.platform}</span></div>
                           )}
-                        </Button>
-                        
-                        <Alert>
-                          <Shield className="h-4 w-4" />
-                          <AlertDescription>
-                            100% safe and tested. All files are scanned for malware.
-                          </AlertDescription>
-                        </Alert>
-                        
-                        {/* Stats */}
-                        <div className="pt-4 space-y-3">
-                          <div>
-                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-muted-foreground">Popularity</span>
-                              <span className="font-medium">
-                                {Math.floor((signal.downloadCount || 5000) / 100)}%
-                              </span>
-                            </div>
-                            <Progress value={Math.min(100, (signal.downloadCount || 5000) / 100)} />
-                          </div>
-                          
-                          <div>
-                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-muted-foreground">Success Rate</span>
-                              <span className="font-medium">
-                                {signal.successRate || '87%'}
-                              </span>
-                            </div>
-                            <Progress value={parseInt(signal.successRate || '87')} />
-                          </div>
+                          {signal.strategy && (
+                            <div className="flex justify-between"><span className="text-muted-foreground">Strategy</span><span className="font-medium">{signal.strategy}</span></div>
+                          )}
+                          {signal.updatedAt && (
+                            <div className="flex justify-between"><span className="text-muted-foreground">Updated</span><span className="font-medium">{new Date(signal.updatedAt).toLocaleDateString()}</span></div>
+                          )}
                         </div>
                       </>
                     ) : null}
                   </CardContent>
                 </Card>
-                
+              
                 {/* Support Card */}
                 <Card>
                   <CardHeader>
