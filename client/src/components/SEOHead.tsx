@@ -32,6 +32,8 @@ interface SEOHeadProps {
   softwareSchema?: SoftwareAppSchemaProps;
   faqItems?: FAQItem[];
   breadcrumbs?: BreadcrumbItem[];
+  publisherName?: string;
+  publisherUrl?: string;
 }
 
 export default function SEOHead({
@@ -50,13 +52,19 @@ export default function SEOHead({
   articleSchema,
   softwareSchema,
   faqItems,
-  breadcrumbs
+  breadcrumbs,
+  publisherName,
+  publisherUrl
 }: SEOHeadProps) {
   const siteUrl = 'https://forexfactory.cc';
   const siteName = 'ForexFactory.cc';
   const defaultOgImage = `${siteUrl}/og-image.png`;
+  const resolvedPublisherName = publisherName || siteName;
+  const resolvedPublisherUrl = publisherUrl || siteUrl;
   
-  const canonicalUrl = canonical || (path ? generateCanonicalUrl(path) : siteUrl);
+  const resolvedPath = path || (typeof window !== 'undefined' ? window.location.pathname : '');
+  const canonicalUrl = canonical || (resolvedPath ? generateCanonicalUrl(resolvedPath) : siteUrl);
+  const metaDescription = description?.trim() || 'Download 500+ free Expert Advisors for MT4/MT5. Professional Forex robots updated daily.';
   const fullTitle = `${title} | ${siteName}`;
   
   // Generate structured data
@@ -66,7 +74,7 @@ export default function SEOHead({
   jsonLdData.push(generateWebsiteSchema());
   
   // Add organization schema on homepage
-  if (path === '/' || path === '') {
+  if (resolvedPath === '/' || resolvedPath === '') {
     jsonLdData.push(generateOrganizationSchema());
   }
   
@@ -100,11 +108,13 @@ export default function SEOHead({
       {/* Primary Meta Tags */}
       <title>{fullTitle}</title>
       <meta name="title" content={fullTitle} />
-      <meta name="description" content={description} />
+      <meta name="description" content={metaDescription} />
+      
       {keywords && <meta name="keywords" content={keywords} />}
       
       {/* Canonical URL */}
       <link rel="canonical" href={canonicalUrl} />
+      <link rel="alternate" hrefLang="en" href={canonicalUrl} />
       
       {/* Robots Meta Tag */}
       <meta name="robots" content={noIndex ? 'noindex, nofollow' : 'index, follow'} />
@@ -112,12 +122,13 @@ export default function SEOHead({
       
       {/* Author and Publisher */}
       <meta name="author" content={author} />
+      <meta name="publisher" content={resolvedPublisherName} />
       
       {/* Open Graph / Facebook */}
       <meta property="og:type" content={ogType} />
       <meta property="og:url" content={canonicalUrl} />
       <meta property="og:title" content={title} />
-      <meta property="og:description" content={description} />
+      <meta property="og:description" content={metaDescription} />
       <meta property="og:image" content={ogImage || defaultOgImage} />
       <meta property="og:site_name" content={siteName} />
       <meta property="og:locale" content="en_US" />
@@ -126,12 +137,15 @@ export default function SEOHead({
       {publishedTime && <meta property="article:published_time" content={publishedTime} />}
       {modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
       {author && ogType === 'article' && <meta property="article:author" content={author} />}
+      {ogType === 'article' && (
+        <meta property="article:publisher" content={resolvedPublisherUrl} />
+      )}
       
       {/* Twitter */}
       <meta property="twitter:card" content="summary_large_image" />
       <meta property="twitter:url" content={canonicalUrl} />
       <meta property="twitter:title" content={title} />
-      <meta property="twitter:description" content={description} />
+      <meta property="twitter:description" content={metaDescription} />
       <meta property="twitter:image" content={ogImage || defaultOgImage} />
       <meta property="twitter:site" content="@forexfactorycc" />
       <meta property="twitter:creator" content="@forexfactorycc" />
@@ -140,6 +154,7 @@ export default function SEOHead({
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
       <meta name="language" content="English" />
+      <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
       
       {/* JSON-LD Structured Data */}
       {jsonLdData.length > 0 && (

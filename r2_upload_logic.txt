@@ -1,0 +1,20 @@
+    try {
+      // Check if R2 is configured
+      if (isR2Configured()) {
+        const { uploadURL } = await getR2PresignedUploadUrl();
+        return res.json({ uploadURL, storage: "r2" });
+      }
+
+      // Check if we're in development mode
+      if (process.env.NODE_ENV === 'development') {
+        // In development, return a local upload URL
+        res.json({ 
+          uploadURL: '/api/admin/upload/local',
+          isLocalUpload: true 
+        });
+      } else {
+        // In production, use object storage
+        const objectStorageService = new ObjectStorageService();
+        const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+        res.json({ uploadURL, isLocalUpload: false });
+      }

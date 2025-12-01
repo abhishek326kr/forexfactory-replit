@@ -122,6 +122,7 @@ export default function PostEditor() {
   });
 
   // Fetch post data if editing
+  // Fetch post data if editing
   const { data: post, isLoading: postLoading } = useQuery({
     queryKey: [`/api/admin/blogs/${id}`],
     queryFn: async () => {
@@ -141,7 +142,15 @@ export default function PostEditor() {
         throw new Error('Failed to fetch categories');
       }
       const data = await response.json();
-      return data.categories || data.data || data;
+      
+      // Handle various response formats safely
+      if (Array.isArray(data)) return data;
+      if (data.categories && Array.isArray(data.categories)) return data.categories;
+      if (data.data && Array.isArray(data.data)) return data.data;
+      
+      // Fallback to empty array if format is unexpected
+      console.warn('Unexpected categories response format:', data);
+      return [];
     }
   });
 

@@ -119,15 +119,43 @@ export default function BlogDetail() {
     );
   }
 
+  const plainDescription = (() => {
+    const desc = blog?.seoMeta?.seoDescription || blog?.excerpt || '';
+    if (!desc) return '';
+    return desc.replace(/<[^>]*>/g, '').slice(0, 160);
+  })();
+
+  const articleSchema = blog
+    ? {
+        headline: blog.seoMeta?.seoTitle || blog.title,
+        description: plainDescription,
+        image: blog.featuredImage ? [blog.featuredImage] : undefined,
+        datePublished: blog.createdAt || blog.publishedAt,
+        dateModified: blog.updatedAt || blog.createdAt || blog.publishedAt,
+        authorName: blog.author || 'ForexFactory.cc',
+        url: `https://forexfactory.cc${location}`,
+      }
+    : undefined;
+
+  const breadcrumbItems = [
+    { name: 'Home', url: '/' },
+    { name: 'Blog', url: '/blog' },
+    ...(blog?.title
+      ? [{ name: blog.title, url: location }]
+      : []),
+  ];
+
   return (
     <HelmetProvider>
       <SEOHead
         title={blog?.seoMeta?.seoTitle || blog?.title || 'Blog Post'}
-        description={blog?.seoMeta?.seoDescription || blog?.excerpt || ''}
+        description={plainDescription}
         keywords={blog?.seoMeta?.seoKeywords || ''}
         path={location}
         ogType="article"
         ogImage={blog?.featuredImage}
+        articleSchema={articleSchema as any}
+        breadcrumbs={breadcrumbItems as any}
       />
       
       <Layout breadcrumbs={breadcrumbs}>

@@ -68,14 +68,43 @@ export default function SignalDetail() {
     );
   }
 
+  const plainDescription = typeof signal?.description === 'string'
+    ? signal.description.replace(/<[^>]*>/g, '').slice(0, 160)
+    : '';
+
+  const softwareSchema = signal
+    ? {
+        name: signal.title || signal.name,
+        description: plainDescription,
+        operatingSystem: 'Windows, MetaTrader 4 / MetaTrader 5',
+        applicationCategory: 'FinanceApplication',
+        offers: {
+          '@type': 'Offer',
+          price: 0,
+          priceCurrency: 'USD',
+        },
+        url: `https://forexfactory.cc${location}`,
+      }
+    : undefined;
+
+  const breadcrumbItems = [
+    { name: 'Home', url: '/' },
+    { name: 'Signals', url: '/signals' },
+    ...(signal?.title || signal?.name
+      ? [{ name: signal.title || signal.name, url: location }]
+      : []),
+  ];
+
   return (
     <HelmetProvider>
       <SEOHead
         title={signal?.title || signal?.name || 'Trading Signal'}
-        description={typeof signal?.description === 'string' ? signal.description.replace(/<[^>]*>/g, '').slice(0, 160) : ''}
+        description={plainDescription}
         keywords={`${signal?.title || signal?.name}, ${signal?.platform || ''}, ${signal?.strategy || ''}, trading signal`}
         path={location}
-        ogType="website"
+        ogType="product"
+        softwareSchema={softwareSchema as any}
+        breadcrumbs={breadcrumbItems as any}
       />
       
       <Layout breadcrumbs={breadcrumbs}>

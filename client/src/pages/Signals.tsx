@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
-import { useLocation } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { Search, Bot, TrendingUp, Activity, Filter, Download } from 'lucide-react';
 import Layout from '@/components/Layout';
 import SEOHead from '@/components/SEOHead';
@@ -34,7 +34,7 @@ export default function Signals() {
   const [strategyFilter, setStrategyFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState('newest');
   const [page, setPage] = useState(1);
-  const signalsPerPage = 12;
+  const signalsPerPage = 9;
 
   // Fetch signals from API
   const { data: signalsData, isLoading: signalsLoading } = useQuery({
@@ -62,6 +62,7 @@ export default function Signals() {
       if (!response.ok) throw new Error('Failed to fetch signals');
       return response.json();
     },
+    staleTime: 5 * 60 * 1000,
     select: (data: any) => {
       return {
         signals: data?.data || data?.signals || [],
@@ -336,13 +337,14 @@ export default function Signals() {
                           </div>
 
                           {/* View Button */}
-                          <Button 
-                            className="w-full" 
-                            size="sm"
-                            onClick={() => window.location.href = `/signals/${signal.uuid || signal.id}`}
-                          >
-                            View Details
-                          </Button>
+                          <Link href={`/signals/${signal.uuid || signal.id}`}>
+                            <Button 
+                              className="w-full" 
+                              size="sm"
+                            >
+                              View Details
+                            </Button>
+                          </Link>
                         </CardContent>
                       </Card>
                     ))}

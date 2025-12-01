@@ -78,6 +78,7 @@ function useUrlFilters() {
 }
 
 export default function BlogEnhanced() {
+  const [location] = useLocation();
   const [filters, setFilters] = useUrlFilters();
   const [searchInput, setSearchInput] = useState(filters.search);
   const [selectedTags, setSelectedTags] = useState<string[]>(filters.tags);
@@ -385,7 +386,7 @@ export default function BlogEnhanced() {
         title={pageTitle}
         description={metaDescription}
         keywords={LONG_TAIL_KEYWORDS.slice(0, 10).join(', ')}
-        path={String(location)}
+        path={location}
         ogType="website"
       />
       
@@ -578,7 +579,7 @@ export default function BlogEnhanced() {
                             date={post.createdAt || new Date().toISOString()}
                             readTime={5}
                             image={post.featuredImage || '/default-blog-image.jpg'}
-                            slug={post.seoSlug || post.id}
+                            slug={post.seoSlug || post.slug || String(post.id)}
                             tags={post.tags ? (typeof post.tags === 'string' ? post.tags.split(',') : post.tags) : []}
                           />
                         );

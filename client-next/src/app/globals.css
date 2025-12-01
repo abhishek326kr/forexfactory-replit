@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  background-color: #05060c;
+  color: #f8fbff;
+}
+
+body {
+  @apply bg-surface-100 text-white min-h-screen font-sans;
+}
+
+.glass-panel {
+  @apply rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl shadow-[0_40px_120px_rgba(10,132,255,0.25)];
+}
+
+.gradient-text {
+  @apply bg-gradient-to-r from-brand via-cyan-400 to-indigo-400 bg-clip-text text-transparent;
+}
+
+.section-heading {
+  @apply text-3xl font-semibold tracking-tight text-white md:text-4xl;
+}
+
+.section-subtitle {
+  @apply mt-3 max-w-2xl text-base text-white/70;
+}
+
+.grid-border {
+  position: relative;
+}
+
+.grid-border::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 1.5rem;
+  padding: 1px;
+  background: linear-gradient(120deg, rgba(10,132,255,0.5), transparent, rgba(88,101,242,0.5));
+  -webkit-mask:
+    linear-gradient(#000, #000) content-box,
+    linear-gradient(#000, #000);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}

@@ -1,0 +1,314 @@
+// This is your Prisma schema file
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(100)
+  email       String    @unique @db.VarChar(100)
+  username    String    @unique @db.VarChar(50)
+  phone       String?   @db.VarChar(15)
+  password    String    @db.VarChar(255)
+  role        AdminRole @default(editor)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  profilePic  String?   @map("profile_pic") @db.VarChar(255)
+  updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at")
+
+  @@map("admins")
+}
+
+model Blog {
+  id            Int       @id @default(autoincrement())
+  title         String    @db.VarChar(500)
+  seoSlug       String    @map("seo_slug") @db.VarChar(500)
+  status        BlogStatus
+  views         Int?      @default(0)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  content       String    @db.Text
+  author        String    @db.VarChar(255)
+  featuredImage String    @map("featured_image") @db.Text
+  tags          String    @db.Text
+  categoryId    Int       @map("category_id")
+  downloadLink  String?   @map("download_link") @db.Text
+
+  categories    BlogCategory[]
+  comments      Comment[]
+  seoMeta       SeoMeta[]
+
+  @@map("blogs")
+}
+
+model BlogCategory {
+  blogId      Int @map("blog_id")
+  categoryId  Int @map("category_id")
+
+  blog        Blog     @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  category    Category @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
+
+  @@id([blogId, categoryId])
+  @@map("blog_categories")
+}
+
+model Category {
+  categoryId  Int      @id @default(autoincrement()) @map("category_id")
+  name        String   @unique @db.VarChar(255)
+  description String?  @db.Text
+  status      CategoryStatus? @default(active)
+
+  blogs       BlogCategory[]
+
+  @@map("categories")
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  postId    Int      @map("post_id")
+  name      String   @db.VarChar(255)
+  email     String   @db.VarChar(255)
+  comment   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  blog      Blog     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model Media {
+  id         Int      @id @default(autoincrement())
+  fileName   String   @map("file_name") @db.VarChar(255)
+  filePath   String   @map("file_path") @db.VarChar(255)
+  uploadedBy Int      @map("uploaded_by")
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  user       User     @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@map("media")
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  token     String   @db.VarChar(64)
+  expiresAt DateTime @map("expires_at")
+  used      Int?     @default(0)
+  createdAt DateTime? @default(now()) @map("created_at")
+
+  @@map("password_reset_tokens")
+}
+
+model Post {
+  id               Int       @id @default(autoincrement())
+  title            String    @db.VarChar(255)
+  slug             String    @unique @db.VarChar(255)
+  content          String    @db.Text
+  image            String?   @db.VarChar(255)
+  authorId         Int       @map("author_id")
+  category         String?   @db.VarChar(100)
+  featuredImage    String?   @map("featured_image") @db.VarChar(255)
+  status           PostStatus? @default(draft)
+  metaTitle        String?   @map("meta_title") @db.VarChar(255)
+  metaDescription  String?   @map("meta_description") @db.Text
+  metaKeywords     String?   @map("meta_keywords") @db.Text
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  author           User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  seoAutomations   SeoAutomation[]
+  indexingLogs     IndexingLog[]
+  serpPreview      SerpPreview?
+
+  @@map("posts")
+}
+
+model SeoMeta {
+  id              Int       @id @default(autoincrement())
+  postId          Int       @map("post_id")
+  seoTitle        String?   @map("seo_title") @db.VarChar(255)
+  seoDescription  String?   @map("seo_description") @db.Text
+  seoKeywords     String?   @map("seo_keywords") @db.Text
+  seoSlug         String?   @map("seo_slug") @db.VarChar(255)
+  canonicalUrl    String?   @map("canonical_url") @db.VarChar(255)
+  metaRobots      MetaRobots? @default(index_follow) @map("meta_robots")
+  ogTitle         String?   @map("og_title") @db.VarChar(255)
+  ogDescription   String?   @map("og_description") @db.Text
+  ogImage         String?   @map("og_image") @db.VarChar(255)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  blog            Blog      @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("seo_meta")
+}
+
+model Signal {
+  id          Int      @id @default(autoincrement())
+  uuid        String   @db.VarChar(32)
+  title       String   @db.VarChar(255)
+  description String   @db.Text
+  filePath    String   @map("file_path") @db.VarChar(500)
+  mime        String   @db.VarChar(100)
+  sizeBytes   Int      @map("size_bytes")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt], name: "created_at_idx")
+  @@map("signals")
+}
+
+model User {
+  id          Int       @id @default(autoincrement())
+  email       String    @unique @db.VarChar(100)
+  password    String    @db.VarChar(255)
+  role        UserRole  @default(viewer)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  phone       String?   @db.VarChar(20)
+  name        String?   @db.VarChar(255)
+  countryCode String?   @default("+91") @map("country_code") @db.VarChar(10)
+  country     String?   @default("IN") @db.VarChar(50)
+
+  posts       Post[]
+  media       Media[]
+
+  @@map("users")
+}
+
+// Enums
+enum AdminRole {
+  admin
+  editor
+}
+
+enum BlogStatus {
+  published
+  draft
+}
+
+enum CategoryStatus {
+  active
+  inactive
+}
+
+enum PostStatus {
+  draft
+  published
+}
+
+enum MetaRobots {
+  index_follow       @map("index, follow")
+  noindex_follow     @map("noindex, follow")
+  index_nofollow     @map("index, nofollow")
+  noindex_nofollow   @map("noindex, nofollow")
+}
+
+enum UserRole {
+  admin
+  editor
+  viewer
+}
+
+// SEO Automation Models
+model SeoTemplate {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique @db.VarChar(100)
+  type        String   @db.VarChar(50) // meta_title, meta_description, schema, etc.
+  template    String   @db.Text
+  variables   String?  @db.Text // JSON array of available variables
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("seo_templates")
+}
+
+model SeoAutomation {
+  id               Int      @id @default(autoincrement())
+  postId           Int?     @map("post_id")
+  taskType         String   @db.VarChar(50) // meta_generation, schema_generation, alt_text, indexing
+  status           String   @default("pending") @db.VarChar(20) // pending, processing, completed, failed
+  input            String?  @db.Text // JSON input data
+  output           String?  @db.Text // JSON output/result
+  error            String?  @db.Text
+  processedAt      DateTime? @map("processed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  post             Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId], name: "post_id_idx")
+  @@index([status], name: "status_idx")
+  @@map("seo_automations")
+}
+
+model IndexingLog {
+  id          Int      @id @default(autoincrement())
+  postId      Int?     @map("post_id")
+  url         String   @db.VarChar(500)
+  service     String   @db.VarChar(50) // google, bing, yahoo
+  action      String   @db.VarChar(50) // submit, update, delete
+  status      String   @db.VarChar(20) // success, failed, pending
+  response    String?  @db.Text // API response
+  error       String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  post        Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId], name: "indexing_post_id_idx")
+  @@index([service, status], name: "service_status_idx")
+  @@map("indexing_logs")
+}
+
+model SerpPreview {
+  id          Int      @id @default(autoincrement())
+  postId      Int      @unique @map("post_id")
+  googleTitle String?  @db.VarChar(60) @map("google_title")
+  googleDesc  String?  @db.VarChar(160) @map("google_description")
+  bingTitle   String?  @db.VarChar(60) @map("bing_title")
+  bingDesc    String?  @db.VarChar(160) @map("bing_description")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("serp_previews")
+}
+
+model NewsletterSubscription {
+  id              Int       @id @default(autoincrement())
+  email           String    @unique @db.VarChar(255)
+  status          String    @default("pending") @db.VarChar(20) // pending, confirmed, unsubscribed
+  confirmToken    String?   @unique @map("confirm_token") @db.VarChar(255)
+  unsubscribeToken String?  @unique @map("unsubscribe_token") @db.VarChar(255)
+  subscribedAt    DateTime? @map("subscribed_at")
+  confirmedAt     DateTime? @map("confirmed_at")
+  unsubscribedAt  DateTime? @map("unsubscribed_at")
+  lastEmailSentAt DateTime? @map("last_email_sent_at")
+  bounceCount     Int       @default(0) @map("bounce_count")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([status], name: "subscription_status_idx")
+  @@map("newsletter_subscriptions")
+}
+
+model EmailLog {
+  id              Int      @id @default(autoincrement())
+  recipient       String   @db.VarChar(255)
+  subject         String   @db.VarChar(500)
+  templateKey     String?  @map("template_key") @db.VarChar(100)
+  status          String   @db.VarChar(20) // sent, failed, bounced, opened, clicked
+  messageId       String?  @map("message_id") @db.VarChar(255)
+  error           String?  @db.Text
+  metadata        String?  @db.Text // JSON metadata
+  sentAt          DateTime? @map("sent_at")
+  openedAt        DateTime? @map("opened_at")
+  clickedAt       DateTime? @map("clicked_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([recipient], name: "email_recipient_idx")
+  @@index([status], name: "email_status_idx")
+  @@map("email_logs")
+}

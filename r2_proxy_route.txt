@@ -1,0 +1,51 @@
+  // GET /public-objects/:filePath(*) - Serve public assets from object storage
+  app.get("/public-objects/:filePath(*)", async (req: Request, res: Response) => {
+    const filePath = req.params.filePath;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const file = await objectStorageService.searchPublicObject(filePath);
+      if (!file) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      objectStorageService.downloadObject(file, res);
+    } catch (error) {
+      console.error("Error searching for public object:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Proxy route for R2 images
+  app.get("/blog-dashboard/uploads/:filePath(*)", async (req: Request, res: Response) => {
+    try {
+      const { filePath } = req.params;
+      const key = `blog-dashboard/uploads/${filePath}`;
+      
+      if (!isR2Configured()) {
+         return res.status(404).send("R2 not configured");
+      }
+
+      const response = await getR2Object(key);
+      
+      if (!response.Body) {
+        return res.status(404).send("File not found");
+      }
+
+      // Set headers
+      if (response.ContentType) {
+        res.setHeader("Content-Type", response.ContentType);
+      }
+      if (response.ContentLength) {
+        res.setHeader("Content-Length", response.ContentLength.toString());
+      }
+      
+      // Stream the response
+      // @ts-ignore - Body is a Readable stream in Node environment
+      response.Body.pipe(res);
+    } catch (error: any) {
+      console.error("Error serving R2 file:", error);
+      if (error.name === 'NoSuchKey') {
+        return res.status(404).send("File not found");
+      }
+      res.status(500).send("Error serving file");
+    }
+  });
